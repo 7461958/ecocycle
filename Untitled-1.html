@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>EcoCycle – Recycling & Waste Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { forest: '#176B4D', leaf: '#8DBF67', mint: '#E5F3E8', ivory: '#F6F7EF', charcoal: '#26352B', sage: '#68776C', sun: '#F2B84B' },
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'] },
+                    boxShadow: { soft: '0 6px 24px -10px rgba(23,107,77,.25)', lift: '0 14px 34px -14px rgba(23,107,77,.35)' }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            box-sizing: border-box;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        html {
+            scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 80px);
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: #F6F7EF;
+            color: #26352B;
+            font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        :focus-visible {
+            outline: 3px solid #F2B84B;
+            outline-offset: 2px;
+            border-radius: 8px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        @keyframes sway {
+
+            0%,
+            100% {
+                transform: rotate(-2deg);
+            }
+
+            50% {
+                transform: rotate(2deg);
+            }
+        }
+
+        .rise {
+            animation: rise .7s ease both;
+        }
+
+        .sway {
+            transform-origin: bottom center;
+            animation: sway 6s ease-in-out infinite;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+    <script type="text/babel" data-presets="react">
+        const { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } = React;
+
+        /* ============================== UTILITIES ============================== */
+        const cx = (...a) => a.filter(Boolean).join(' ');
+        const pad = n => String(n).padStart(2, '0');
+        const toISO = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const todayISO = () => toISO(new Date());
+        const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+        const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+        const fmtDate = s => parseISO(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const fmtTime = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${pad(m)} ${h >= 12 ? 'PM' : 'AM'}`; };
+        const refId = p => `${p}-${Math.floor(100000 + Math.random() * 900000)}`;
+        const uid = () => Math.random().toString(36).slice(2, 9);
+        const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        function usePersist(key, initial) {
+            const [v, setV] = useState(() => {
+                try { const raw = localStorage.getItem(key); if (raw) return JSON.parse(raw); } catch (e) { }
+                return initial;
+            });
+            useEffect(() => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } }, [key, v]);
+            return [v, setV];
+        }
+
+        /* ============================== ICONS ============================== */
+        const ICONS = {
+            menu: 'M4 6h16M4 12h16M4 18h16', x: 'M18 6 6 18M6 6l12 12', check: 'M20 6 9 17l-5-5',
+            search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+            truck: 'M10 17h4V5H2v12h3M14 9h4l4 4v4h-3M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+            alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+            pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0zM12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+            book: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5',
+            leaf: 'M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10zM2 21c0-3 1.9-5.4 5-7',
+            grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+            calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+            bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+            trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
+            phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z',
+            clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+            users: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+            ext: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3',
+            upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12', plus: 'M12 5v14M5 12h14',
+            arrow: 'M5 12h14M12 5l7 7-7 7', left: 'M19 12H5M12 19l-7-7 7-7', chev: 'm9 18 6-6-6-6', chevl: 'm15 18-6-6 6-6',
+            scale: 'M12 3v18M5 7h14M5 7l-3 8a4 4 0 0 0 6 0zM19 7l-3 8a4 4 0 0 0 6 0z',
+            mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
+            trophy: 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1.2 1.2C7.8 18.7 7 20.2 7 22M14 14.7V17c0 .6.5 1 1.2 1.2 1 .5 1.8 2 1.8 3.8M18 2H6v7a6 6 0 0 0 12 0z',
+            zap: 'M13 2 3 14h9l-1 8 10-12h-9z', info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
+            share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13',
+            heart: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.3l7.8-7.8 1-1.1a5.5 5.5 0 0 0 0-7.8z',
+            globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z',
+            camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+            trend: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6', flag: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
+            sprout: 'M7 20h10M10 20c5.5-2.5.8-6.4 3-10M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8zM14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z',
+            loader: 'M21 12a9 9 0 1 1-6.2-8.6',
+        };
+        function Icon({ name, size = 20, className = '', strokeWidth = 2 }) {
+            return (
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth}
+                    strokeLinecap="round" strokeLinejoin="round" className={cx('shrink-0', className)} aria-hidden="true">
+                    <path d={ICONS[name] || ICONS.leaf} />
+                </svg>
+            );
+        }
+
+        /* ============================== ILLUSTRATIONS ============================== */
+        function HeroIllustration() {
+            return (
+                <svg viewBox="0 0 560 480" role="img" aria-label="Illustration of recycling bins in front of a green neighborhood with trees and homes" className="w-full h-auto">
+                    <rect width="560" height="480" rx="28" fill="#E5F3E8" />
+                    <circle cx="450" cy="92" r="46" fill="#F2B84B" />
+                    <circle cx="450" cy="92" r="64" fill="#F2B84B" opacity=".18" />
+                    <path d="M0 330 C90 250 170 260 250 300 C340 240 450 230 560 300 V480 H0Z" fill="#8DBF67" opacity=".55" />
+                    <path d="M0 370 C110 310 200 330 290 355 C380 320 480 310 560 350 V480 H0Z" fill="#8DBF67" />
+                    <path d="M0 410 C120 380 260 400 380 392 C450 388 510 380 560 388 V480 H0Z" fill="#176B4D" />
+                    {/* houses */}
+                    <g>
+                        <rect x="52" y="262" width="82" height="62" fill="#FFFFFF" /><path d="M42 266 93 222 144 266Z" fill="#176B4D" />
+                        <rect x="80" y="288" width="22" height="36" fill="#E5F3E8" /><rect x="58" y="276" width="14" height="14" fill="#E5F3E8" />
+                        <rect x="146" y="282" width="66" height="50" fill="#F6F7EF" /><path d="M138 286 179 250 220 286Z" fill="#26352B" />
+                        <rect x="168" y="304" width="20" height="28" fill="#8DBF67" />
+                    </g>
+                    {/* trees */}
+                    <g className="sway"><rect x="408" y="268" width="10" height="66" fill="#26352B" /><circle cx="413" cy="252" r="38" fill="#176B4D" /><circle cx="388" cy="276" r="26" fill="#8DBF67" /><circle cx="440" cy="278" r="24" fill="#8DBF67" /></g>
+                    <g className="sway" style={{ animationDelay: '-2s' }}><rect x="500" y="298" width="8" height="46" fill="#26352B" /><circle cx="504" cy="288" r="26" fill="#176B4D" /></g>
+                    {/* bins */}
+                    <g>
+                        <rect x="150" y="318" width="92" height="116" rx="10" fill="#176B4D" /><rect x="142" y="306" width="108" height="20" rx="8" fill="#145a41" />
+                        <rect x="224" y="372" width="0" height="0" />
+                        <g transform="translate(196 372)" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"><path d="M-14 6 -4 -12 6 6M-4 -12 4 -2M-14 6h10M6 6l-10 0" opacity="0" /><path d="M-16 8 -6 -10h12M8 -4 14 6 6 18H-6M-6 18 -12 10" /></g>
+                    </g>
+                    <g>
+                        <rect x="262" y="332" width="84" height="102" rx="10" fill="#F2B84B" /><rect x="254" y="320" width="100" height="20" rx="8" fill="#d99f35" />
+                        <circle cx="304" cy="384" r="16" fill="none" stroke="#26352B" strokeWidth="5" /><path d="M296 384l6 6 11-12" fill="none" stroke="#26352B" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+                    </g>
+                    <g>
+                        <rect x="358" y="346" width="70" height="88" rx="10" fill="#FFFFFF" stroke="#176B4D" strokeWidth="3" /><rect x="351" y="335" width="84" height="18" rx="8" fill="#8DBF67" />
+                        <path d="M376 392c8-14 24-14 32 0M376 410h32" fill="none" stroke="#176B4D" strokeWidth="5" strokeLinecap="round" />
+                    </g>
+                    {/* floating items */}
+                    <g fill="#FFFFFF" stroke="#176B4D" strokeWidth="3"><rect x="88" y="110" width="40" height="56" rx="10" transform="rotate(-14 108 138)" /><path d="M96 108h24" /></g>
+                    <g transform="translate(232 82)"><circle r="30" fill="#FFFFFF" /><g fill="none" stroke="#176B4D" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-14 -14) scale(1.17)"><path d={ICONS.leaf} /></g></g>
+                    <circle cx="330" cy="150" r="7" fill="#176B4D" opacity=".5" /><circle cx="170" cy="190" r="5" fill="#8DBF67" /><circle cx="520" cy="190" r="6" fill="#F2B84B" />
+                </svg>
+            );
+        }
+        const THUMB = {
+            'Waste Segregation': ['#176B4D', '#8DBF67', 'grid'], 'Plastic Recycling': ['#26352B', '#8DBF67', 'recycle'],
+            'Paper and Cardboard': ['#F2B84B', '#F6F7EF', 'book'], 'Glass and Metal': ['#68776C', '#E5F3E8', 'scale'],
+            'Electronic Waste': ['#26352B', '#F2B84B', 'zap'], 'Composting': ['#8DBF67', '#176B4D', 'sprout'],
+            'Sustainable Living': ['#176B4D', '#E5F3E8', 'globe'], 'Reduce, Reuse, Recycle': ['#8DBF67', '#26352B', 'leaf'],
+        };
+        function Thumb({ kind, className = '', label }) {
+            const [a, b, ic] = THUMB[kind] || ['#176B4D', '#8DBF67', 'leaf'];
+            const icon = ic === 'recycle' ? 'leaf' : ic;
+            return (
+                <div className={cx('relative overflow-hidden', className)} role="img" aria-label={label || `${kind} illustration`} style={{ background: a }}>
+                    <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full" aria-hidden="true">
+                        <circle cx="270" cy="30" r="90" fill={b} opacity=".28" /><circle cx="30" cy="190" r="80" fill={b} opacity=".22" />
+                        <path d="M0 150 C80 110 160 170 320 120 V200 H0Z" fill={b} opacity=".4" />
+                        <g transform="translate(120 56) scale(3.4)" fill="none" stroke={b === '#F6F7EF' || b === '#E5F3E8' ? b : '#fff'} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[icon]} /></g>
+                    </svg>
+                </div>
+            );
+        }
+        const CENTER_COLORS = { 'Drop-off Center': 'Waste Segregation', 'Buy-back Center': 'Glass and Metal', 'E-waste Facility': 'Electronic Waste', 'Composting Site': 'Composting', 'Community Hub': 'Sustainable Living' };
+
+        /* ============================== CONTEXT ============================== */
+        const AppCtx = createContext(null);
+        const useApp = () => useContext(AppCtx);
+
+        /* ============================== UI COMPONENTS ============================== */
+        function Btn({ variant = 'primary', size = 'md', to, href, className = '', icon, iconRight, children, loading, ...rest }) {
+            const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 min-h-[44px] disabled:opacity-60 disabled:cursor-not-allowed select-none';
+            const sizes = { sm: 'px-3.5 text-sm min-h-[40px]', md: 'px-5 text-[15px]', lg: 'px-7 text-base min-h-[52px]' };
+            const variants = {
+                primary: 'bg-forest text-white hover:bg-[#12583f] shadow-soft hover:shadow-lift',
+                outline: 'bg-white text-forest border border-forest/30 hover:border-forest hover:bg-mint',
+                light: 'bg-white text-forest hover:bg-mint',
+                soft: 'bg-mint text-forest hover:bg-[#d6ecda]',
+                ghost: 'text-charcoal hover:bg-mint',
+                danger: 'bg-white text-[#9b2c2c] border border-[#9b2c2c]/30 hover:bg-[#fdeeee]',
+                sun: 'bg-sun text-charcoal hover:brightness-95',
+            };
+            const cls = cx(base, sizes[size], variants[variant], className);
+            const inner = <>{loading ? <Icon name="loader" className="animate-spin" size={18} /> : icon && <Icon name={icon} size={18} />}{children}{iconRight && <Icon name={iconRight} size={18} />}</>;
+            if (to) return <a href={'#' + to} className={cls} {...rest}>{inner}</a>;
+            if (href) return <a href={href} target="_blank" rel="noopener noreferrer" className={cls} {...rest}>{inner}</a>;
+            return <button type="button" className={cls} disabled={loading || rest.disabled} {...rest}>{inner}</button>;
+        }
+        function Card({ className = '', children, hover, ...rest }) {
+            const hasBg = /(^|\s)bg-/.test(className);
+            const noBorder = /(^|\s)border-0(\s|$)/.test(className);
+            return <div className={cx(!hasBg && 'bg-white', !noBorder && 'border border-forest/10', 'rounded-2xl shadow-soft', hover && 'transition duration-200 hover:-translate-y-0.5 hover:shadow-lift', className)} {...rest}>{children}</div>;
+        }
+        const BADGE = {
+            Pending: 'bg-sun/25 text-[#6b4a00]', Confirmed: 'bg-mint text-forest', Scheduled: 'bg-forest text-white', Collected: 'bg-leaf/35 text-[#0f4a34]', Cancelled: 'bg-stone-200 text-stone-600',
+            Submitted: 'bg-sun/25 text-[#6b4a00]', 'Under Review': 'bg-mint text-forest', 'In Progress': 'bg-forest text-white', Resolved: 'bg-leaf/35 text-[#0f4a34]',
+        };
+        function StatusBadge({ status }) {
+            return <span className={cx('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap', BADGE[status] || 'bg-mint text-forest')}>{status}</span>;
+        }
+        function Chip({ children, tone = 'mint' }) {
+            const t = { mint: 'bg-mint text-forest', sun: 'bg-sun/25 text-[#6b4a00]', white: 'bg-white/90 text-forest', gray: 'bg-ivory text-sage border border-forest/10' }[tone];
+            return <span className={cx('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold', t)}>{children}</span>;
+        }
+        function Field({ label, error, required, hint, id, children }) {
+            return (
+                <div>
+                    <label htmlFor={id} className="block text-sm font-semibold mb-1.5">{label}{required && <span className="text-forest" aria-hidden="true"> *</span>}</label>
+                    {children}
+                    {hint && !error && <p className="text-xs text-sage mt-1">{hint}</p>}
+                    {error && <p id={id + '-err'} role="alert" className="text-xs font-semibold text-[#b03030] mt-1.5 flex items-center gap-1"><Icon name="alert" size={14} />{error}</p>}
+                </div>
+            );
+        }
+        const inp = (err) => cx('w-full rounded-xl border bg-white px-3.5 min-h-[46px] text-[15px] text-charcoal placeholder:text-sage/70 transition focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest', err ? 'border-[#b03030]' : 'border-forest/20');
+        function Input({ label, error, required, hint, id, ...rest }) {
+            return <Field label={label} error={error} required={required} hint={hint} id={id}><input id={id} aria-invalid={!!error} aria-describedby={error ? id + '-err' : undefined} className={inp(error)} {...rest} /></Field>;
+        }
+        function Select({ label, error, required, id, options, placeholder, ...rest }) {
+            return (
+                <Field label={label} error={error} required={required} id={id}>
+                    <select id={id} aria-invalid={!!error} className={inp(error)} {...rest}>
+                        {placeholder && <option value="">{placeholder}</option>}
+                        {options.map(o => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>)}
+                    </select>
+                </Field>
+            );
+        }
+        function Textarea({ label, error, required, id, hint, ...rest }) {
+            return <Field label={label} error={error} required={required} id={id} hint={hint}><textarea id={id} rows={4} aria-invalid={!!error} className={cx(inp(error), 'py-3 resize-y')} {...rest} /></Field>;
+        }
+        function FileField({ label, id, file, onChange, error }) {
+            return (
+                <Field label={label} id={id} error={error} hint="Demo only: the file stays in your browser and is not uploaded anywhere.">
+                    <label htmlFor={id} className="flex items-center gap-3 rounded-xl border border-dashed border-forest/40 bg-mint/50 hover:bg-mint px-4 py-3 cursor-pointer transition focus-within:ring-2 focus-within:ring-forest/40">
+                        <Icon name="upload" className="text-forest" />
+                        <span className="text-sm text-charcoal truncate">{file ? file.name : 'Choose an image (max 5 MB)'}</span>
+                        <input id={id} type="file" accept="image/*" className="sr-only" onChange={e => onChange(e.target.files[0] || null)} />
+                    </label>
+                </Field>
+            );
+        }
+        function Modal({ open, onClose, title, children, wide }) {
+            const ref = useRef(null);
+            useEffect(() => {
+                if (!open) return;
+                const prev = document.activeElement;
+                const onKey = e => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', onKey);
+                document.body.style.overflow = 'hidden';
+                setTimeout(() => { const f = ref.current && ref.current.querySelector('input,select,textarea,button,a'); f && f.focus(); }, 30);
+                return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; prev && prev.focus && prev.focus(); };
+            }, [open]);
+            if (!open) return null;
+            return (
+                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4" role="presentation">
+                    <div className="absolute inset-0 bg-charcoal/55 backdrop-blur-[2px]" onClick={onClose} />
+                    <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx('relative bg-white w-full max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-lift', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
+                        <div className="sticky top-0 bg-white/95 backdrop-blur flex items-center justify-between gap-4 px-6 py-4 border-b border-forest/10 z-10">
+                            <h2 className="text-lg font-extrabold text-forest">{title}</h2>
+                            <button onClick={onClose} aria-label="Close dialog" className="p-2 rounded-lg hover:bg-mint"><Icon name="x" /></button>
+                        </div>
+                        <div className="p-6">{children}</div>
+                    </div>
+                </div>
+            );
+        }
+        function EmptyState({ icon = 'leaf', title, text, action }) {
+            return (
+                <div className="text-center py-12 px-6 bg-white/70 border border-dashed border-forest/25 rounded-2xl">
+                    <div className="mx-auto w-14 h-14 rounded-2xl bg-mint text-forest grid place-items-center mb-4"><Icon name={icon} size={26} /></div>
+                    <h3 className="font-bold text-lg">{title}</h3>
+                    <p className="text-sage mt-1 max-w-sm mx-auto">{text}</p>
+                    {action && <div className="mt-5">{action}</div>}
+                </div>
+            );
+        }
+        function PageHeader({ icon, title, text, children }) {
+            return (
+                <header className="bg-mint border-b border-forest/10">
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14 flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div className="max-w-2xl">
+                            <div className="w-12 h-12 rounded-2xl bg-forest text-white grid place-items-center mb-4"><Icon name={icon} size={24} /></div>
+                            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-forest">{title}</h1>
+                            <p className="text-sage mt-3 text-base sm:text-lg leading-relaxed">{text}</p>
+                        </div>
+                        {children}
+                    </div>
+                </header>
+            );
+        }
+        function Toasts({ items, dismiss }) {
+            return (
+                <div className="fixed z-[90] bottom-4 right-4 left-4 sm:left-auto sm:w-96 flex flex-col gap-2" aria-live="polite" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                    {items.map(t => (
+                        <div key={t.id} className={cx('rise flex items-start gap-3 rounded-xl px-4 py-3 shadow-lift text-sm font-semibold', t.type === 'error' ? 'bg-[#fdeeee] text-[#8a2323] border border-[#b03030]/30' : 'bg-forest text-white')}>
+                            <Icon name={t.type === 'error' ? 'alert' : 'check'} size={18} className="mt-0.5" />
+                            <span className="flex-1">{t.msg}</span>
+                            <button onClick={() => dismiss(t.id)} aria-label="Dismiss notification" className="opacity-80 hover:opacity-100"><Icon name="x" size={16} /></button>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        function Section({ className = '', children, id }) {
+            return <section id={id} className={cx('max-w-6xl mx-auto px-4 sm:px-6', className)}>{children}</section>;
+        }
+
+        /* ============================== DATA ============================== */
+        const WASTE_CATS = ['Paper', 'Plastic', 'Glass', 'Metal', 'Electronic Waste', 'Organic Waste', 'Textile', 'Mixed Recyclables', 'Other'];
+        const TIME_SLOTS = ['Morning (8 AM – 12 PM)', 'Afternoon (12 PM – 4 PM)', 'Evening (4 PM – 7 PM)'];
+        const REQ_STATUSES = ['Pending', 'Confirmed', 'Scheduled', 'Collected'];
+        const REPORT_CATS = { 'Illegal Dumping': 'trash', 'Overflowing Bin': 'alert', 'Roadside Waste': 'pin', 'Hazardous Waste': 'zap', 'Plastic Pollution': 'globe', 'Missed Collection': 'truck', Other: 'flag' };
+        const REPORT_STATUSES = ['Submitted', 'Under Review', 'In Progress', 'Resolved'];
+
+        const SEED_REQUESTS = [
+            { id: 'REQ-482910', name: 'Sample Resident', category: 'Paper', quantity: '12 kg (3 boxes)', date: toISO(addDays(new Date(), 3)), slot: TIME_SLOTS[0], area: 'Riverside', address: '14 Willow Lane', status: 'Confirmed', sample: true },
+            { id: 'REQ-310477', name: 'Sample Resident', category: 'Electronic Waste', quantity: '2 items', date: toISO(addDays(new Date(), 6)), slot: TIME_SLOTS[1], area: 'Hillcrest', address: '8 Cedar Court', status: 'Pending', sample: true },
+            { id: 'REQ-205538', name: 'Sample Resident', category: 'Glass', quantity: '20 bottles', date: toISO(addDays(new Date(), -4)), slot: TIME_SLOTS[2], area: 'Maple Park', address: '3 Orchard Road', status: 'Collected', sample: true },
+        ];
+        const SEED_REPORTS = [
+            { id: 'RPT-730154', title: 'Overflowing bins near the market square', category: 'Overflowing Bin', description: 'Public bins have been full for several days and waste is spilling onto the walkway.', location: 'Market Square, Riverside', date: toISO(addDays(new Date(), -5)), status: 'In Progress', sample: true },
+            { id: 'RPT-612908', title: 'Bags dumped behind the old depot', category: 'Illegal Dumping', description: 'About ten black bags and some broken furniture left behind the depot fence.', location: 'Old Depot Road, Hillcrest', date: toISO(addDays(new Date(), -9)), status: 'Under Review', sample: true },
+            { id: 'RPT-558201', title: 'Plastic litter along the creek path', category: 'Plastic Pollution', description: 'Bottles and wrappers collecting along the creek bank after the weekend market.', location: 'Creekside Path, Maple Park', date: toISO(addDays(new Date(), -16)), status: 'Resolved', sample: true },
+            { id: 'RPT-447716', title: 'Recycling pickup skipped on Elm Street', category: 'Missed Collection', description: 'Blue bins on the east side were not emptied on the usual collection day.', location: 'Elm Street, Greenfield', date: toISO(addDays(new Date(), -2)), status: 'Submitted', sample: true },
+        ];
+
+        function nextWeekday(dow) { const d = new Date(); const diff = (dow - d.getDay() + 7) % 7; return toISO(addDays(d, diff)); }
+        const SEED_REMINDERS = [
+            { id: 'rem1', title: 'Paper Recycling', category: 'Paper', date: nextWeekday(1), time: '09:00', frequency: 'Weekly', enabled: true },
+            { id: 'rem2', title: 'Plastic Collection', category: 'Plastic', date: nextWeekday(3), time: '10:30', frequency: 'Weekly', enabled: true },
+            { id: 'rem3', title: 'E-waste Drop-off', category: 'Electronic Waste', date: nextWeekday(6), time: '11:00', frequency: 'Monthly', enabled: true },
+        ];
+
+        const CENTERS = [
+            { id: 'c1', name: 'Greenway Drop-off Center', type: 'Drop-off Center', address: '120 Greenway Avenue, Riverside District', materials: ['Paper', 'Plastic', 'Glass', 'Metal'], hours: 'Mon–Sat, 8:00 AM – 5:00 PM', phone: '(555) 010-2101', about: 'A staffed neighborhood drop-off with separate bays for paper, plastics, glass, and metals.' },
+            { id: 'c2', name: 'Riverbend E-Waste Facility', type: 'E-waste Facility', address: '45 Industrial Row, Riverbend', materials: ['Electronic Waste', 'Metal'], hours: 'Tue–Sat, 9:00 AM – 4:00 PM', phone: '(555) 010-2102', about: 'Accepts small and large electronics, cables, and batteries for safe dismantling.' },
+            { id: 'c3', name: 'Hilltop Community Hub', type: 'Community Hub', address: '7 Hilltop Terrace, Hillcrest', materials: ['Paper', 'Plastic', 'Textile', 'Mixed Recyclables'], hours: 'Daily, 10:00 AM – 6:00 PM', phone: '(555) 010-2103', about: 'A community space with a swap shelf, textile bins, and weekend repair workshops.' },
+            { id: 'c4', name: 'Maple Park Composting Site', type: 'Composting Site', address: '2 Orchard Gate, Maple Park', materials: ['Organic Waste'], hours: 'Wed & Sat, 7:00 AM – 1:00 PM', phone: '(555) 010-2104', about: 'Drop off food scraps and garden waste, and collect finished compost on the first Saturday.' },
+            { id: 'c5', name: 'Copperline Metal Buy-back', type: 'Buy-back Center', address: '88 Foundry Street, Copperline', materials: ['Metal', 'Electronic Waste'], hours: 'Mon–Fri, 8:30 AM – 4:30 PM', phone: '(555) 010-2105', about: 'Weighs and pays for clean scrap metal, aluminium cans, and copper.' },
+            { id: 'c6', name: 'Clearview Glass & Paper Depot', type: 'Drop-off Center', address: '31 Clearview Boulevard, Greenfield', materials: ['Glass', 'Paper'], hours: 'Mon–Sat, 7:30 AM – 3:30 PM', phone: '(555) 010-2106', about: 'Colour-sorted glass containers and a baling area for cardboard and paper.' },
+            { id: 'c7', name: 'Linden Textile & Reuse Hub', type: 'Community Hub', address: '19 Linden Walk, Old Town', materials: ['Textile', 'Other'], hours: 'Thu–Sun, 11:00 AM – 6:00 PM', phone: '(555) 010-2107', about: 'Clothing, linens, and household items are sorted for reuse, repair, or fibre recycling.' },
+            { id: 'c8', name: 'Eastgate Mixed Recycling Point', type: 'Drop-off Center', address: '210 Eastgate Road, Eastgate', materials: ['Plastic', 'Paper', 'Metal', 'Mixed Recyclables'], hours: 'Daily, 6:00 AM – 8:00 PM', phone: '(555) 010-2108', about: 'Unstaffed 24-bay collection point, ideal for quick everyday drop-offs.' },
+        ];
+
+        const ARTICLES = [
+            {
+                id: 'separate-household-waste', title: 'How to Separate Household Waste', category: 'Waste Segregation', mins: 5, featured: true,
+                desc: 'A simple three-bin system that makes recycling at home quick and clean.',
+                body: ['Good recycling starts in the kitchen, not at the sorting plant. A simple three-bin setup covers most households: one for dry recyclables (paper, plastic, metal, glass), one for food and garden waste, and one for everything that cannot be recycled locally.',
+                    'Rinse containers lightly so food residue does not spoil nearby paper. They do not need to be spotless. Flatten cardboard boxes and keep paper dry, since wet paper is much harder to recycle.',
+                    'Keep items loose in the bin rather than bagged. Bags can hide contents from sorting staff and often get diverted to general waste. When you are unsure about an item, check your local guidelines instead of guessing, because a wrong item can contaminate a whole batch.',
+                    'Make it easy to follow: label bins, place them where you naturally create waste, and agree on the rules with everyone in the home. Consistency matters more than perfection.']
+            },
+            {
+                id: 'recycling-symbols', title: 'Understanding Recycling Symbols', category: 'Plastic Recycling', mins: 4, featured: true,
+                desc: 'What the triangle and numbers on plastic really tell you.',
+                body: ['The chasing-arrows triangle on packaging does not always mean an item is accepted by your local program. The number inside it is a resin code that identifies the type of plastic.',
+                    'Codes 1 (PET, found in drink bottles) and 2 (HDPE, found in milk jugs and detergent bottles) are the most widely accepted. Code 5 (polypropylene, used for tubs and caps) is increasingly accepted. Codes 3, 6, and 7 are often harder to recycle.',
+                    'Other symbols matter too. A green dot usually refers to producer funding rather than recyclability, while a bin with a cross through it signals that electronics or batteries should not go in general waste.',
+                    'Because collection rules differ between places, treat the symbol as a clue and confirm with your local recycling service.']
+            },
+            {
+                id: 'reduce-plastic-waste', title: 'Simple Ways to Reduce Plastic Waste', category: 'Reduce, Reuse, Recycle', mins: 4, featured: true,
+                desc: 'Everyday swaps that cut single-use plastic without extra effort.',
+                body: ['The most effective plastic is the plastic you never use. Start with the items you throw away most often: bags, bottles, straws, cutlery, and food wrap.',
+                    'Carry a reusable bottle, a cloth bag, and a small container for takeaway food. Keep them by the door or in your work bag so they are there when you need them.',
+                    'At home, buy larger sizes of staples you use often, choose refill options where available, and swap cling film for reusable covers or containers.',
+                    'Reuse comes before recycling. Jars become storage, tubs hold leftovers, and bottles can be refilled. Recycle whatever remains, and treat that as the last step rather than the first.']
+            },
+            {
+                id: 'paper-cardboard', title: 'Getting More From Paper and Cardboard', category: 'Paper and Cardboard', mins: 4,
+                desc: 'Which paper products can be recycled, and how to keep them in good condition.',
+                body: ['Paper fibres can be recycled several times, but each cycle shortens them, so clean, dry paper is valuable. Newspaper, office paper, cardboard boxes, and cartons are commonly accepted.',
+                    'Greasy pizza boxes, used tissues, and paper towels are generally not suitable because food and oil contaminate the fibres. Tear off the clean part of a box if you can.',
+                    'Remove plastic windows and bulky tape where practical, flatten boxes, and keep everything dry. Shredded paper is often too short for sorting machines, so check whether your local program wants it bagged separately.']
+            },
+            {
+                id: 'glass-metal', title: 'Glass and Metal: Endlessly Recyclable', category: 'Glass and Metal', mins: 3,
+                desc: 'Why jars, cans, and tins are some of the best things to recycle.',
+                body: ['Glass and most metals can be recycled again and again without losing quality. Using recycled material in manufacturing generally takes far less energy than starting from raw ingredients.',
+                    'Rinse jars, bottles, tins, and aluminium cans, and remove loose lids. Many programs ask you to separate glass by colour, so check your local rules.',
+                    'Drinking glasses, window glass, and ceramics melt at different temperatures from container glass and usually do not belong in the glass bin. Aerosol cans should be fully empty before recycling.']
+            },
+            {
+                id: 'old-electronics', title: 'What to Do With Old Electronics', category: 'Electronic Waste', mins: 5,
+                desc: 'Safe ways to pass on phones, cables, and batteries.',
+                body: ['Electronics contain useful metals as well as materials that should never end up in landfill. Batteries in particular can cause fires if crushed or placed in regular bins.',
+                    'Before recycling, consider whether the item can be repaired, sold, or donated. Always back up and erase personal data from phones, laptops, and tablets first.',
+                    'Take devices, cables, chargers, and batteries to a dedicated e-waste drop-off instead of putting them in household bins. Tape the terminals of loose lithium batteries and store them in a dry place until you can drop them off.']
+            },
+            {
+                id: 'start-composting', title: 'Start Composting at Home', category: 'Composting', mins: 6,
+                desc: 'Turn food scraps and leaves into rich soil with a basic setup.',
+                body: ['Food and garden waste make up a large share of household rubbish, and composting turns it into a useful soil improver. You can compost in a backyard bin, a tumbler, or a small indoor bokashi bucket.',
+                    'Aim for a balance of green materials (vegetable scraps, fruit peels, coffee grounds) and brown materials (dry leaves, shredded cardboard, straw). A rough guide is about two parts brown to one part green.',
+                    'Keep the pile damp like a wrung-out sponge and turn it every week or two. Avoid meat, dairy, oils, and pet waste in a basic home bin, as they attract pests.',
+                    'In a few months you should have dark, crumbly compost that smells earthy, ready to feed plants and pots.']
+            },
+            {
+                id: 'sustainable-living', title: "A Beginner's Guide to Sustainable Living", category: 'Sustainable Living', mins: 5,
+                desc: 'Small, realistic habits that add up to a lighter footprint.',
+                body: ['Sustainable living is a set of small habits, not a perfect lifestyle. Pick one or two changes, make them routine, and then add more.',
+                    'Waste less food by planning meals and storing produce well. Repair before replacing, buy second-hand when you can, and choose durable products over disposable ones.',
+                    'Use fewer resources day to day: shorter showers, energy-efficient bulbs, and walking, cycling, or sharing rides when practical.',
+                    'Join community efforts such as clean-up days and swap events. Shared habits last longer and make a bigger difference than solo effort.']
+            },
+        ];
+        const ARTICLE_CATS = ['Waste Segregation', 'Plastic Recycling', 'Paper and Cardboard', 'Glass and Metal', 'Electronic Waste', 'Composting', 'Sustainable Living', 'Reduce, Reuse, Recycle'];
+
+        const SORT_ITEMS = [
+            { item: 'Plastic bottle', cat: 'Dry Recyclables (Plastic)', tone: 'forest', tips: ['Empty and give it a quick rinse.', 'Squash it and put the cap back on if your local program asks for that.', 'Check for codes 1 or 2, which are the most widely accepted.'] },
+            { item: 'Cardboard box', cat: 'Dry Recyclables (Paper & Cardboard)', tone: 'forest', tips: ['Remove packing tape and plastic where you can.', 'Flatten the box to save space.', 'Keep it dry. Wet or greasy cardboard is often rejected.'] },
+            { item: 'Glass jar', cat: 'Glass Recycling', tone: 'forest', tips: ['Rinse and remove the lid.', 'Sort by colour if your local program requires it.', 'Do not mix with drinking glasses or window glass.'] },
+            { item: 'Aluminium can', cat: 'Metal Recycling', tone: 'forest', tips: ['Rinse and place loose in the recycling bin.', 'Crushing is optional and depends on local advice.', 'Aluminium can be recycled repeatedly.'] },
+            { item: 'Used battery', cat: 'Hazardous Waste / E-waste Drop-off', tone: 'sun', tips: ['Never place batteries in household bins.', 'Tape the terminals of lithium batteries.', 'Take them to a battery or e-waste collection point.'] },
+            { item: 'Food scraps', cat: 'Organic Waste / Compost', tone: 'leaf', tips: ['Compost fruit, vegetable scraps, and coffee grounds.', 'Avoid meat, dairy, and oils in a basic home bin.', 'Use a food-waste collection if available.'] },
+            { item: 'Newspaper', cat: 'Dry Recyclables (Paper & Cardboard)', tone: 'forest', tips: ['Keep it dry and loose.', 'Bundle with other clean paper.', 'Shredded paper may need separate bagging.'] },
+            { item: 'Pizza box', cat: 'Mixed: Compost or Landfill if greasy', tone: 'sun', tips: ['Tear off any clean lid and recycle it.', 'Greasy or food-soiled parts usually cannot be recycled.', 'Small greasy pieces may go in compost where accepted.'] },
+            { item: 'Old phone', cat: 'Electronic Waste', tone: 'sun', tips: ['Back up and erase your data first.', 'Consider repair, resale, or donation.', 'Drop it at an e-waste facility.'] },
+            { item: 'Plastic bag', cat: 'Special Collection (not curbside)', tone: 'sun', tips: ['Reuse bags as often as possible.', 'Many stores collect clean bags separately.', 'Loose bags can jam sorting machines, so keep them out of the bin.'] },
+            { item: 'Old clothes', cat: 'Textile Reuse / Donation', tone: 'leaf', tips: ['Donate wearable items.', 'Worn-out textiles can go to a fibre recycling bin.', 'Wash and dry items before donating.'] },
+            { item: 'Light bulb', cat: 'Hazardous Waste / Special Collection', tone: 'sun', tips: ['Do not place in glass recycling.', 'CFL and fluorescent bulbs contain mercury and need special drop-off.', 'Wrap broken bulbs safely before disposal.'] },
+        ];
+
+        const QUIZ = [
+            { q: 'Which item should NOT go in the recycling bin?', o: ['Rinsed aluminium can', 'Greasy pizza box', 'Clean cardboard box', 'Empty glass jar'], a: 1, why: 'Grease contaminates paper fibres, so food-soiled cardboard usually cannot be recycled.' },
+            { q: 'What does the number inside a recycling triangle on plastic identify?', o: ['How many times it was recycled', 'The type of plastic resin', 'The year it was made', 'The weight of the item'], a: 1, why: 'The resin code identifies the plastic type, such as 1 for PET or 2 for HDPE.' },
+            { q: 'What is the best thing to do with a used battery?', o: ['Put it in the general bin', 'Bury it in the garden', 'Take it to a battery or e-waste drop-off', 'Burn it'], a: 2, why: 'Batteries can leak or cause fires and contain materials that need proper handling.' },
+            { q: 'Which belongs in a home compost bin?', o: ['Vegetable peels', 'Plastic wrappers', 'Cooked meat and oil', 'Glass bottles'], a: 0, why: 'Vegetable peels are a classic green material. Meat and oils attract pests in basic bins.' },
+            { q: 'Why should recyclables be kept loose rather than in a plastic bag?', o: ['Bags are heavy', 'Bagged items often cannot be sorted and may be sent to waste', 'It looks tidier', 'Bags dissolve in water'], a: 1, why: 'Sorting staff and machines cannot see inside bags, so bagged recyclables are often discarded.' },
+            { q: 'Which approach comes first in "Reduce, Reuse, Recycle"?', o: ['Recycle', 'Reuse', 'Reduce', 'Dispose'], a: 2, why: 'Using less in the first place prevents waste entirely, which is more effective than recycling it.' },
+        ];
+
+        const MONTHLY = [{ m: 'Apr', v: 142 }, { m: 'May', v: 168 }, { m: 'Jun', v: 155 }, { m: 'Jul', v: 190 }, { m: 'Aug', v: 214 }, { m: 'Sep', v: 236 }, { m: 'Oct', v: 145 }];
+        const BREAKDOWN = [{ n: 'Paper', v: 32, c: '#176B4D' }, { n: 'Plastic', v: 24, c: '#8DBF67' }, { n: 'Glass', v: 16, c: '#F2B84B' }, { n: 'Metal', v: 12, c: '#68776C' }, { n: 'E-waste', v: 9, c: '#26352B' }, { n: 'Organic', v: 7, c: '#BFE0A8' }];
+        const CAMPAIGNS = [
+            { t: 'Plastic-Free Week', d: 'Nov 3 – Nov 9', icon: 'globe', text: 'Share your best swaps and go a week without single-use plastic. This is a sample campaign for the demo.' },
+            { t: 'Neighborhood Clean-up Day', d: 'Nov 16', icon: 'users', text: 'Gather neighbors, gloves, and bags for a morning litter pick. This is a sample campaign for the demo.' },
+            { t: 'Compost Kickstart', d: 'Dec 1 – Dec 14', icon: 'sprout', text: 'Learn to set up a basic compost bin and swap tips with other participants. This is a sample campaign for the demo.' },
+        ];
+        const CHALLENGES = [
+            { id: 'ch1', t: 'Sort it right for 30 days', goal: 30, unit: 'days', base: 12 },
+            { id: 'ch2', t: 'Zero single-use bottles', goal: 20, unit: 'refills', base: 7 },
+            { id: 'ch3', t: 'Drop off one e-waste item', goal: 1, unit: 'item', base: 0 },
+        ];
+        const TIPS = ['Rinse containers quickly. A little food residue is fine, but heavy mess can spoil a whole batch.', 'Keep a small bin for batteries and cables so they do not end up in the trash.', 'Carry a reusable bottle. It is the simplest plastic reduction habit.', 'Flatten boxes to save space in the bin and the collection truck.', 'Try a "no-buy" week for non-essentials and see what you really need.', 'Check your local rules often. Recycling guidelines change.'];
+
+        const FAQS = [
+            ['Is EcoCycle a real service?', 'No. This website is a frontend demonstration. Forms, reminders, and reports are stored only in your browser.'],
+            ['Are the recycling centers real?', 'No. All centers, addresses, and phone numbers are fictional sample data.'],
+            ['Will anyone collect my request?', 'No. Demo requests and reports are not sent to any organization or authority.'],
+            ['How do I clear my demo data?', 'Use the "Reset demo data" button in the footer to restore the original sample content.'],
+        ];
+
+        /* ============================== NAV + FOOTER ============================== */
+        const NAV = [['/', 'Home'], ['/recycling', 'Recycling'], ['/report', 'Report Waste'], ['/centers', 'Recycling Centers'], ['/learn', 'Learn']];
+        const ALL_PAGES = [
+            ['/recycling', 'Recycling Requests', 'Schedule a demo pickup', 'truck'], ['/reminders', 'Collection Reminders', 'Plan your collection days', 'bell'],
+            ['/report', 'Waste Reporting', 'Report a waste problem', 'alert'], ['/centers', 'Recycling Centers', 'Browse the sample directory', 'pin'],
+            ['/learn', 'Learn & Resources', 'Guides, sorting help, and a quiz', 'book'], ['/impact', 'Community Impact', 'See the demo sustainability dashboard', 'trend'],
+        ];
+        function Logo({ light }) {
+            return (
+                <a href="#/" className="flex items-center gap-2.5 font-extrabold text-xl tracking-tight" aria-label="EcoCycle home">
+                    <span className={cx('w-9 h-9 rounded-xl grid place-items-center', light ? 'bg-white text-forest' : 'bg-forest text-white')}><Icon name="leaf" size={20} /></span>
+                    <span className={light ? 'text-white' : 'text-forest'}>EcoCycle</span>
+                </a>
+            );
+        }
+        function Navbar({ route, openStart }) {
+            const [open, setOpen] = useState(false);
+            useEffect(() => setOpen(false), [route]);
+            const active = p => (p === '/' ? route === '/' : route.startsWith(p));
+            return (
+                <header className="sticky top-0 z-50 bg-ivory/90 backdrop-blur border-b border-forest/10" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+                    <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4" aria-label="Main">
+                        <Logo />
+                        <ul className="hidden lg:flex items-center gap-1">
+                            {NAV.map(([p, l]) => (
+                                <li key={p}><a href={'#' + p} aria-current={active(p) ? 'page' : undefined} className={cx('px-3.5 py-2 rounded-lg text-[15px] font-semibold transition', active(p) ? 'bg-mint text-forest' : 'text-charcoal hover:bg-mint/70')}>{l}</a></li>
+                            ))}
+                        </ul>
+                        <div className="flex items-center gap-2">
+                            <Btn size="sm" onClick={openStart} className="hidden sm:inline-flex">Get Started</Btn>
+                            <button className="lg:hidden p-2.5 rounded-xl hover:bg-mint" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name={open ? 'x' : 'menu'} size={24} /></button>
+                        </div>
+                    </nav>
+                    {open && (
+                        <div className="lg:hidden border-t border-forest/10 bg-ivory px-4 pb-5 pt-3">
+                            <ul className="flex flex-col gap-1">
+                                {NAV.map(([p, l]) => <li key={p}><a href={'#' + p} className={cx('block px-4 py-3 rounded-xl font-semibold', active(p) ? 'bg-mint text-forest' : 'hover:bg-mint/70')}>{l}</a></li>)}
+                                <li><a href="#/reminders" className="block px-4 py-3 rounded-xl font-semibold hover:bg-mint/70">Collection Reminders</a></li>
+                                <li><a href="#/impact" className="block px-4 py-3 rounded-xl font-semibold hover:bg-mint/70">Community Impact</a></li>
+                            </ul>
+                            <Btn className="w-full mt-3" onClick={() => { setOpen(false); openStart(); }}>Get Started</Btn>
+                        </div>
+                    )}
+                </header>
+            );
+        }
+        function Footer({ onFaq, onReset }) {
+            const { toast } = useApp();
+            const social = [['globe', 'Website'], ['mail', 'Email'], ['share', 'Share'], ['heart', 'Follow']];
+            return (
+                <footer className="bg-forest text-white mt-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                            <Logo light />
+                            <p className="mt-4 text-white/80 text-sm leading-relaxed">Small Actions. Cleaner Communities. EcoCycle is a frontend demonstration project built to showcase recycling and waste management interactions.</p>
+                            <div className="flex gap-2 mt-5">
+                                {social.map(([i, l]) => <button key={l} aria-label={`${l} (demo, not connected)`} onClick={() => toast(`${l} link is a demo and isn't connected.`)} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 grid place-items-center transition"><Icon name={i} size={18} /></button>)}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="font-bold mb-4">Quick Links</h3>
+                            <ul className="space-y-2.5 text-white/85 text-sm">
+                                {[['/', 'Home'], ['/recycling', 'Recycling Requests'], ['/reminders', 'Collection Reminders'], ['/report', 'Waste Reporting'], ['/centers', 'Recycling Centers'], ['/learn', 'Learn & Resources'], ['/impact', 'Community Impact']].map(([p, l]) => <li key={p}><a className="hover:text-white hover:underline" href={'#' + p}>{l}</a></li>)}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="font-bold mb-4">Contact (demo)</h3>
+                            <ul className="space-y-3 text-white/85 text-sm">
+                                <li className="flex gap-2"><Icon name="pin" size={18} className="mt-0.5" />100 Sample Street, Demo City</li>
+                                <li className="flex gap-2"><Icon name="phone" size={18} className="mt-0.5" />(555) 010-0000</li>
+                                <li className="flex gap-2"><Icon name="mail" size={18} className="mt-0.5" />hello@ecocycle.example</li>
+                            </ul>
+                            <p className="text-xs text-white/60 mt-3">Placeholder details only. No messages are sent from this site.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold mb-4">About &amp; Help</h3>
+                            <ul className="space-y-2.5 text-sm text-white/85">
+                                <li><button onClick={onFaq} className="hover:text-white hover:underline text-left">FAQs</button></li>
+                                <li><button onClick={onReset} className="hover:text-white hover:underline text-left">Reset demo data</button></li>
+                            </ul>
+                            <p className="text-sm text-white/80 mt-4 leading-relaxed">We help communities recycle more, waste less, and stay informed.</p>
+                        </div>
+                    </div>
+                    <div className="border-t border-white/15 py-5 text-center text-xs text-white/70 px-4">© {new Date().getFullYear()} EcoCycle demo. All statistics, centers, and reports are fictional sample data.</div>
+                </footer>
+            );
+        }
+
+        /* ============================== HOME ============================== */
+        function Home() {
+            const quick = [
+                ['/recycling', 'Request Recycling Pickup', 'Schedule a demo pickup for your recyclables in a few clicks.', 'truck', 'bg-forest text-white', 'bg-white/15 text-white', 'text-white/85'],
+                ['/report', 'Report Waste Issues', 'Flag dumping, overflowing bins, or missed collections.', 'alert', 'bg-sun/25 text-charcoal', 'bg-white text-[#8a6100]', 'text-charcoal/75'],
+                ['/centers', 'Find Recycling Centers', 'Search a sample directory by material and type.', 'pin', 'bg-mint text-charcoal', 'bg-white text-forest', 'text-sage'],
+                ['/learn', 'Explore Recycling Guides', 'Learn what goes where with guides, a sorting tool, and a quiz.', 'book', 'bg-white text-charcoal border border-forest/15', 'bg-mint text-forest', 'text-sage'],
+            ];
+            const stats = [['1,250', 'kg', 'Waste Collected', 'scale'], ['320', '', 'Pickups Completed', 'truck'], ['185', '', 'Community Participants', 'users'], ['96', '', 'Waste Reports Resolved', 'check']];
+            const steps = [['Submit a recycling request or waste report.', 'edit'], ['Explore collection information and recycling resources.', 'book'], ['Help create a cleaner, healthier community.', 'heart']];
+            return (
+                <>
+                    <Section className="pt-10 sm:pt-16 pb-6 grid lg:grid-cols-2 gap-10 items-center">
+                        <div className="rise">
+                            <span className="inline-flex items-center gap-2 bg-mint text-forest rounded-full pl-2 pr-4 py-1.5 text-sm font-bold"><span className="w-6 h-6 rounded-full bg-sun grid place-items-center text-charcoal"><Icon name="leaf" size={14} /></span>Together for a Greener Tomorrow.</span>
+                            <h1 className="mt-5 text-4xl sm:text-5xl lg:text-[3.6rem] leading-[1.05] font-extrabold tracking-tight text-forest">Turn Your Waste Into a Better Tomorrow.</h1>
+                            <p className="mt-5 text-lg text-sage leading-relaxed max-w-xl">Make recycling easier, report waste problems, discover nearby recycling centers, and take small steps toward a cleaner community.</p>
+                            <div className="mt-8 flex flex-wrap gap-3">
+                                <Btn to="/recycling" size="lg" icon="truck">Request a Pickup</Btn>
+                                <Btn to="/centers" size="lg" variant="outline" icon="pin">Find Recycling Centers</Btn>
+                            </div>
+                            <p className="mt-5 text-sm text-sage">Frontend demo. No real pickups, reports, or notifications are sent.</p>
+                        </div>
+                        <div className="rise" style={{ animationDelay: '.12s' }}><HeroIllustration /></div>
+                    </Section>
+
+                    <Section className="mt-14">
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {quick.map(([to, t, d, ic, bg, ibg, tx]) => (
+                                <a key={to} href={'#' + to} className={cx('group rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:shadow-lift flex flex-col', bg)}>
+                                    <span className={cx('w-12 h-12 rounded-xl grid place-items-center', ibg)}><Icon name={ic} size={24} /></span>
+                                    <h3 className="mt-5 font-extrabold text-lg leading-snug">{t}</h3>
+                                    <p className={cx('mt-2 text-sm leading-relaxed flex-1', tx)}>{d}</p>
+                                    <span className="mt-5 inline-flex items-center gap-1.5 font-bold text-sm">Open <Icon name="arrow" size={16} className="transition group-hover:translate-x-1" /></span>
+                                </a>
+                            ))}
+                        </div>
+                    </Section>
+
+                    <Section className="mt-20">
+                        <h2 className="text-3xl font-extrabold text-forest tracking-tight">How it works</h2>
+                        <div className="mt-8 grid md:grid-cols-3 gap-5 relative">
+                            {steps.map(([t, ic], i) => (
+                                <Card key={i} className="p-6 relative">
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-10 h-10 rounded-full bg-forest text-white grid place-items-center font-extrabold">{i + 1}</span>
+                                        <Icon name={ic} className="text-leaf" size={26} />
+                                    </div>
+                                    <p className="mt-4 font-bold text-lg leading-snug">{t}</p>
+                                </Card>
+                            ))}
+                        </div>
+                    </Section>
+
+                    <Section className="mt-20">
+                        <div className="rounded-3xl bg-mint p-6 sm:p-10">
+                            <div className="flex flex-wrap items-end justify-between gap-3">
+                                <h2 className="text-3xl font-extrabold text-forest tracking-tight">Community impact</h2>
+                                <Chip tone="sun">Sample / demo statistics. Not verified results.</Chip>
+                            </div>
+                            <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                {stats.map(([n, u, l, ic]) => (
+                                    <div key={l} className="bg-white rounded-2xl p-5 border border-forest/10">
+                                        <Icon name={ic} className="text-leaf" size={26} />
+                                        <p className="mt-3 text-3xl sm:text-4xl font-extrabold text-forest">{n}<span className="text-lg ml-1 text-sage">{u}</span></p>
+                                        <p className="text-sm font-semibold text-sage mt-1">{l}</p>
+                                        <div className="mt-3 h-1.5 rounded-full bg-mint overflow-hidden"><div className="h-full bg-sun rounded-full" style={{ width: ['78%', '64%', '52%', '88%'][stats.findIndex(s => s[2] === l)] }} /></div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-6"><Btn to="/impact" variant="light" iconRight="arrow">See the impact dashboard</Btn></div>
+                        </div>
+                    </Section>
+
+                    <Section className="mt-20">
+                        <div className="flex items-end justify-between gap-4 flex-wrap">
+                            <h2 className="text-3xl font-extrabold text-forest tracking-tight">Featured educational resources</h2>
+                            <Btn to="/learn" variant="ghost" iconRight="arrow">All resources</Btn>
+                        </div>
+                        <div className="mt-8 grid md:grid-cols-3 gap-5">
+                            {ARTICLES.filter(a => a.featured).map(a => <ArticleCard key={a.id} a={a} />)}
+                        </div>
+                    </Section>
+
+                    <Section className="mt-20">
+                        <div className="relative overflow-hidden rounded-3xl bg-forest text-white p-8 sm:p-14 text-center">
+                            <svg className="absolute -right-10 -bottom-10 opacity-15" width="320" height="320" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth=".8" aria-hidden="true"><path d={ICONS.leaf} /></svg>
+                            <h2 className="relative text-3xl sm:text-4xl font-extrabold tracking-tight">A Cleaner Community Starts With You.</h2>
+                            <p className="relative mt-3 text-white/80 max-w-xl mx-auto">Pick one small action today. Schedule a demo pickup, test your knowledge, or explore the sample centers.</p>
+                            <div className="relative mt-7"><Btn to="/recycling" variant="sun" size="lg">Take Action Today</Btn></div>
+                        </div>
+                    </Section>
+                </>
+            );
+        }
+        function ArticleCard({ a, onOpen }) {
+            const inner = (
+                <>
+                    <Thumb kind={a.category} className="h-44" label={`Illustration for ${a.title}`} />
+                    <div className="p-5 flex flex-col flex-1">
+                        <div className="flex items-center gap-2 flex-wrap"><Chip>{a.category}</Chip><span className="text-xs text-sage flex items-center gap-1"><Icon name="clock" size={14} />{a.mins} min read</span></div>
+                        <h3 className="mt-3 font-extrabold text-lg leading-snug">{a.title}</h3>
+                        <p className="mt-2 text-sm text-sage leading-relaxed flex-1">{a.desc}</p>
+                        <span className="mt-4 inline-flex items-center gap-1.5 text-forest font-bold text-sm">{onOpen ? 'Read Article' : 'Read More'} <Icon name="arrow" size={16} /></span>
+                    </div>
+                </>
+            );
+            const cls = 'flex flex-col text-left bg-white border border-forest/10 rounded-2xl shadow-soft overflow-hidden transition duration-200 hover:-translate-y-1 hover:shadow-lift h-full w-full';
+            return onOpen ? <button className={cls} onClick={() => onOpen(a)} aria-label={`Read article: ${a.title}`}>{inner}</button> : <a className={cls} href={'#/learn/' + a.id}>{inner}</a>;
+        }
+
+        /* ============================== RECYCLING REQUESTS ============================== */
+        function Recycling() {
+            const { toast } = useApp();
+            const [requests, setRequests] = usePersist('eco_requests', SEED_REQUESTS);
+            const empty = { name: '', email: '', phone: '', address: '', area: '', category: '', quantity: '', date: '', slot: '', notes: '' };
+            const [f, setF] = useState(empty);
+            const [photo, setPhoto] = useState(null);
+            const [errors, setErrors] = useState({});
+            const [busy, setBusy] = useState(false);
+            const [success, setSuccess] = useState(null);
+            const set = k => e => { setF({ ...f, [k]: e.target.value }); if (errors[k]) setErrors({ ...errors, [k]: undefined }); };
+
+            const validate = () => {
+                const e = {};
+                if (f.name.trim().length < 2) e.name = 'Enter your full name.';
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email)) e.email = 'Enter a valid email, like name@example.com.';
+                if (!/^[+()\d\s-]{7,18}$/.test(f.phone) || f.phone.replace(/\D/g, '').length < 7) e.phone = 'Enter a phone number with at least 7 digits.';
+                if (f.address.trim().length < 5) e.address = 'Enter the pickup address.';
+                if (!f.area.trim()) e.area = 'Enter your area or neighborhood.';
+                if (!f.category) e.category = 'Choose a waste category.';
+                if (!f.quantity.trim()) e.quantity = 'Estimate the quantity, for example "10 kg" or "2 bags".';
+                if (!f.date) e.date = 'Choose a pickup date.'; else if (f.date < todayISO()) e.date = 'Pickup date cannot be in the past.';
+                if (!f.slot) e.slot = 'Choose a time slot.';
+                if (photo && photo.size > 5 * 1024 * 1024) e.photo = 'Image must be under 5 MB.';
+                return e;
+            };
+            const submit = ev => {
+                ev.preventDefault();
+                const e = validate(); setErrors(e);
+                if (Object.keys(e).length) { toast('Please fix the highlighted fields.', 'error'); const el = document.getElementById('req-' + Object.keys(e)[0]); el && el.focus(); return; }
+                setBusy(true);
+                setTimeout(() => {
+                    const id = refId('REQ');
+                    setRequests([{ id, name: f.name, category: f.category, quantity: f.quantity, date: f.date, slot: f.slot, area: f.area, address: f.address, status: 'Pending', photo: photo ? photo.name : null }, ...requests]);
+                    setSuccess(id); setBusy(false); setF(empty); setPhoto(null);
+                    toast('Demo request added to your history.');
+                }, 1100);
+            };
+            const cancel = id => { setRequests(requests.map(r => r.id === id ? { ...r, status: 'Cancelled' } : r)); toast('Demo request cancelled.'); };
+            const advance = id => setRequests(requests.map(r => { if (r.id !== id) return r; const i = REQ_STATUSES.indexOf(r.status); return i > -1 && i < REQ_STATUSES.length - 1 ? { ...r, status: REQ_STATUSES[i + 1] } : r; }));
+
+            return (
+                <>
+                    <PageHeader icon="truck" title="Recycling Requests" text="Tell us what you have, where it is, and when suits you. Your request appears in the history on this page." />
+                    <Section className="mt-8 grid lg:grid-cols-5 gap-8 items-start">
+                        <Card className="lg:col-span-3 p-6 sm:p-8">
+                            <h2 className="text-xl font-extrabold text-forest">New pickup request</h2>
+                            {success && (
+                                <div className="mt-5 rounded-xl bg-mint border border-forest/20 p-4 flex gap-3" role="status">
+                                    <Icon name="check" className="text-forest mt-0.5" />
+                                    <div><p className="font-bold text-forest">Demo request created</p><p className="text-sm text-charcoal mt-1">Reference number <strong>{success}</strong>. It is now in your request history. Nothing was sent to a real team.</p></div>
+                                    <button className="ml-auto self-start p-1 rounded hover:bg-white" aria-label="Dismiss message" onClick={() => setSuccess(null)}><Icon name="x" size={16} /></button>
+                                </div>
+                            )}
+                            <form onSubmit={submit} noValidate className="mt-6 grid sm:grid-cols-2 gap-5">
+                                <Input id="req-name" label="Full name" required value={f.name} onChange={set('name')} error={errors.name} autoComplete="name" placeholder="Jordan Rivers" />
+                                <Input id="req-email" label="Email address" type="email" required value={f.email} onChange={set('email')} error={errors.email} autoComplete="email" placeholder="you@example.com" />
+                                <Input id="req-phone" label="Phone number" type="tel" required value={f.phone} onChange={set('phone')} error={errors.phone} autoComplete="tel" placeholder="(555) 010-1234" />
+                                <Input id="req-area" label="Area or neighborhood" required value={f.area} onChange={set('area')} error={errors.area} placeholder="Riverside" />
+                                <div className="sm:col-span-2"><Input id="req-address" label="Pickup address" required value={f.address} onChange={set('address')} error={errors.address} autoComplete="street-address" placeholder="14 Willow Lane" /></div>
+                                <Select id="req-category" label="Waste category" required value={f.category} onChange={set('category')} error={errors.category} placeholder="Select a category" options={WASTE_CATS} />
+                                <Input id="req-quantity" label="Estimated quantity" required value={f.quantity} onChange={set('quantity')} error={errors.quantity} placeholder="e.g. 10 kg or 2 bags" />
+                                <Input id="req-date" label="Preferred pickup date" type="date" required min={todayISO()} value={f.date} onChange={set('date')} error={errors.date} />
+                                <Select id="req-slot" label="Preferred time slot" required value={f.slot} onChange={set('slot')} error={errors.slot} placeholder="Select a time slot" options={TIME_SLOTS} />
+                                <div className="sm:col-span-2"><Textarea id="req-notes" label="Additional instructions" value={f.notes} onChange={set('notes')} placeholder="Gate code, where to leave items, anything else we should know." /></div>
+                                <div className="sm:col-span-2"><FileField id="req-photo" label="Photo (optional)" file={photo} onChange={setPhoto} error={errors.photo} /></div>
+                                <div className="sm:col-span-2 flex flex-wrap gap-3 pt-1">
+                                    <Btn type="submit" loading={busy} size="lg" icon="truck">{busy ? 'Submitting demo request…' : 'Submit demo request'}</Btn>
+                                    <Btn variant="ghost" size="lg" onClick={() => { setF(empty); setErrors({}); setPhoto(null); }}>Clear form</Btn>
+                                </div>
+                            </form>
+                        </Card>
+
+                        <div className="lg:col-span-2 space-y-5">
+                            <Card className="p-6 bg-mint border-0">
+                                <h3 className="font-extrabold text-forest flex items-center gap-2"><Icon name="info" size={18} />Before you request</h3>
+                                <ul className="mt-3 space-y-2 text-sm text-charcoal">
+                                    {['Rinse containers and keep paper dry.', 'Separate different materials where you can.', 'Batteries and electronics are best kept separate.'].map(t => <li key={t} className="flex gap-2"><Icon name="check" size={16} className="text-forest mt-0.5" />{t}</li>)}
+                                </ul>
+                            </Card>
+                            <div>
+                                <div className="flex items-center justify-between mb-3"><h2 className="text-xl font-extrabold text-forest">Request history</h2><Chip tone="gray">{requests.length} total</Chip></div>
+                                {requests.length === 0 ? <EmptyState icon="truck" title="No requests yet" text="Submit the form and your demo request will show up here." /> : (
+                                    <ul className="space-y-3">
+                                        {requests.map(r => (
+                                            <li key={r.id}>
+                                                <Card className="p-4">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div><p className="font-bold">{r.category}</p><p className="text-xs text-sage">{r.id}{r.sample ? ' · Sample' : ''}</p></div>
+                                                        <StatusBadge status={r.status} />
+                                                    </div>
+                                                    <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-sm">
+                                                        <dt className="text-sage">Date</dt><dd>{fmtDate(r.date)}</dd>
+                                                        <dt className="text-sage">Time</dt><dd>{r.slot.split(' (')[0]}</dd>
+                                                        <dt className="text-sage">Quantity</dt><dd>{r.quantity}</dd>
+                                                        <dt className="text-sage">Area</dt><dd>{r.area}</dd>
+                                                    </dl>
+                                                    {r.photo && <p className="text-xs text-sage mt-2 flex items-center gap-1"><Icon name="camera" size={14} />{r.photo}</p>}
+                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                        {r.status === 'Pending' && <Btn size="sm" variant="danger" onClick={() => cancel(r.id)}>Cancel request</Btn>}
+                                                        {REQ_STATUSES.includes(r.status) && r.status !== 'Collected' && <Btn size="sm" variant="soft" onClick={() => advance(r.id)}>Advance status (demo)</Btn>}
+                                                    </div>
+                                                </Card>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    </Section>
+                </>
+            );
+        }
+
+        /* ============================== COLLECTION REMINDERS ============================== */
+        function occursOn(r, iso) {
+            if (iso < r.date) return false;
+            if (r.frequency === 'One-time') return iso === r.date;
+            const a = parseISO(r.date), b = parseISO(iso);
+            if (r.frequency === 'Weekly') return a.getDay() === b.getDay();
+            return a.getDate() === b.getDate();
+        }
+        function nextOccurrence(r) { for (let i = 0; i < 62; i++) { const iso = toISO(addDays(new Date(), i)); if (occursOn(r, iso)) return iso; } return null; }
+
+        function Reminders() {
+            const { toast } = useApp();
+            const [items, setItems] = usePersist('eco_reminders', SEED_REMINDERS);
+            const [view, setView] = useState('list');
+            const [modal, setModal] = useState(null);
+            const [del, setDel] = useState(null);
+            const now = new Date();
+            const [cal, setCal] = useState({ y: now.getFullYear(), m: now.getMonth() });
+            const [sel, setSel] = useState(todayISO());
+
+            const upcoming = useMemo(() => items.filter(r => r.enabled).map(r => ({ r, next: nextOccurrence(r) })).filter(x => x.next).sort((a, b) => (a.next + a.r.time).localeCompare(b.next + b.r.time)).slice(0, 3), [items]);
+            const save = data => {
+                if (data.id) { setItems(items.map(r => r.id === data.id ? data : r)); toast('Reminder updated.'); }
+                else { setItems([{ ...data, id: uid(), enabled: true }, ...items]); toast('Reminder added.'); }
+                setModal(null);
+            };
+            const toggle = id => setItems(items.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+            const first = new Date(cal.y, cal.m, 1), lead = first.getDay(), dim = new Date(cal.y, cal.m + 1, 0).getDate();
+            const cells = [...Array(lead).fill(null), ...Array.from({ length: dim }, (_, i) => i + 1)];
+            const isoOf = d => `${cal.y}-${pad(cal.m + 1)}-${pad(d)}`;
+            const forDay = iso => items.filter(r => occursOn(r, iso)).sort((a, b) => a.time.localeCompare(b.time));
+            const shift = n => { const d = new Date(cal.y, cal.m + n, 1); setCal({ y: d.getFullYear(), m: d.getMonth() }); };
+
+            const Row = ({ r }) => (
+                <Card className={cx('p-4 flex flex-wrap items-center gap-4', !r.enabled && 'opacity-60')}>
+                    <span className="w-11 h-11 rounded-xl bg-mint text-forest grid place-items-center"><Icon name="bell" /></span>
+                    <div className="flex-1 min-w-[180px]">
+                        <p className="font-bold">{r.title}</p>
+                        <p className="text-sm text-sage">{r.category} · {r.frequency === 'Weekly' ? `Every ${DAYS[parseISO(r.date).getDay()]}` : r.frequency === 'Monthly' ? `Monthly on day ${parseISO(r.date).getDate()}` : fmtDate(r.date)} · {fmtTime(r.time)}</p>
+                    </div>
+                    <Chip tone="gray">{r.frequency}</Chip>
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-semibold">
+                        <span className="relative inline-block w-11 h-6">
+                            <input type="checkbox" className="peer sr-only" checked={r.enabled} onChange={() => toggle(r.id)} aria-label={`${r.enabled ? 'Disable' : 'Enable'} ${r.title}`} />
+                            <span className="absolute inset-0 rounded-full bg-stone-300 peer-checked:bg-forest transition peer-focus-visible:ring-2 peer-focus-visible:ring-sun" />
+                            <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition peer-checked:translate-x-5" />
+                        </span>{r.enabled ? 'On' : 'Off'}
+                    </label>
+                    <div className="flex gap-1">
+                        <button className="p-2.5 rounded-lg hover:bg-mint" aria-label={`Edit ${r.title}`} onClick={() => setModal(r)}><Icon name="edit" size={18} /></button>
+                        <button className="p-2.5 rounded-lg hover:bg-[#fdeeee] text-[#9b2c2c]" aria-label={`Delete ${r.title}`} onClick={() => setDel(r)}><Icon name="trash" size={18} /></button>
+                    </div>
+                </Card>
+            );
+
+            return (
+                <>
+                    <PageHeader icon="bell" title="Collection Reminders" text="Keep track of collection days for each type of waste. Add, edit, pause, or remove reminders below.">
+                        <Btn icon="plus" size="lg" onClick={() => setModal({})}>Add reminder</Btn>
+                    </PageHeader>
+
+                    <Section className="mt-10">
+                        <h2 className="text-xl font-extrabold text-forest">Upcoming collections</h2>
+                        {upcoming.length === 0 ? <div className="mt-4"><EmptyState icon="bell" title="Nothing coming up" text="Turn a reminder on or add a new one to see upcoming collections here." action={<Btn onClick={() => setModal({})} icon="plus">Add reminder</Btn>} /></div> : (
+                            <div className="mt-4 grid md:grid-cols-3 gap-4">
+                                {upcoming.map(({ r, next }, i) => (
+                                    <Card key={r.id} className={cx('p-5', i === 0 && 'bg-forest text-white border-0')}>
+                                        <p className={cx('text-sm font-semibold', i === 0 ? 'text-white/80' : 'text-sage')}>{next === todayISO() ? 'Today' : DAYS[parseISO(next).getDay()]}, {fmtDate(next)}</p>
+                                        <p className="mt-1 text-xl font-extrabold">{r.title}</p>
+                                        <p className={cx('mt-3 text-sm flex items-center gap-2', i === 0 ? 'text-white/90' : 'text-charcoal')}><Icon name="clock" size={16} />{fmtTime(r.time)}<span className="opacity-60">·</span>{r.category}</p>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </Section>
+
+                    <Section className="mt-12">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                            <h2 className="text-xl font-extrabold text-forest">All reminders</h2>
+                            <div className="inline-flex rounded-xl bg-white border border-forest/15 p-1" role="group" aria-label="Switch view">
+                                {[['list', 'List', 'list'], ['calendar', 'Calendar', 'calendar']].map(([v, l, ic]) => (
+                                    <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={cx('px-4 min-h-[40px] rounded-lg text-sm font-semibold flex items-center gap-2 transition', view === v ? 'bg-forest text-white' : 'text-charcoal hover:bg-mint')}><Icon name={ic} size={16} />{l}</button>
+                                ))}
+                            </div>
+                        </div>
+                        {view === 'list' ? (
+                            <div className="mt-5 space-y-3">{items.length === 0 ? <EmptyState icon="bell" title="No reminders yet" text="Add your first reminder to build a collection schedule." action={<Btn onClick={() => setModal({})} icon="plus">Add reminder</Btn>} /> : items.map(r => <Row key={r.id} r={r} />)}</div>
+                        ) : (
+                            <div className="mt-5 grid lg:grid-cols-3 gap-6 items-start">
+                                <Card className="lg:col-span-2 p-4 sm:p-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <button className="p-2.5 rounded-lg hover:bg-mint" aria-label="Previous month" onClick={() => shift(-1)}><Icon name="chevl" /></button>
+                                        <h3 className="font-extrabold text-lg">{first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                                        <button className="p-2.5 rounded-lg hover:bg-mint" aria-label="Next month" onClick={() => shift(1)}><Icon name="chev" /></button>
+                                    </div>
+                                    <div className="grid grid-cols-7 text-center text-xs font-bold text-sage mb-2">{DAYS.map(d => <div key={d}>{d.slice(0, 3)}</div>)}</div>
+                                    <div className="grid grid-cols-7 gap-1">
+                                        {cells.map((d, i) => {
+                                            if (!d) return <div key={i} />;
+                                            const iso = isoOf(d), ev = forDay(iso), isSel = iso === sel, isToday = iso === todayISO();
+                                            return (
+                                                <button key={i} onClick={() => setSel(iso)} aria-label={`${fmtDate(iso)}, ${ev.length} reminders`} aria-pressed={isSel}
+                                                    className={cx('min-h-[54px] sm:min-h-[72px] rounded-xl p-1.5 text-left border transition flex flex-col', isSel ? 'bg-forest text-white border-forest' : 'bg-ivory border-transparent hover:border-forest/30', isToday && !isSel && 'ring-2 ring-sun')}>
+                                                    <span className="text-sm font-bold">{d}</span>
+                                                    <span className="mt-auto flex gap-1 flex-wrap">{ev.slice(0, 3).map(e => <span key={e.id} className={cx('w-2 h-2 rounded-full', e.enabled ? (isSel ? 'bg-sun' : 'bg-forest') : 'bg-stone-400')} />)}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </Card>
+                                <Card className="p-5">
+                                    <h3 className="font-extrabold">{fmtDate(sel)}</h3>
+                                    {forDay(sel).length === 0 ? <p className="text-sm text-sage mt-3">No collections on this day.</p> : (
+                                        <ul className="mt-3 space-y-3">{forDay(sel).map(r => (
+                                            <li key={r.id} className="flex gap-3 items-start"><span className={cx('w-2.5 h-2.5 rounded-full mt-1.5', r.enabled ? 'bg-forest' : 'bg-stone-400')} /><div><p className="font-semibold leading-tight">{r.title}</p><p className="text-sm text-sage">{fmtTime(r.time)} · {r.category}{!r.enabled && ' · Off'}</p></div></li>
+                                        ))}</ul>
+                                    )}
+                                    <Btn size="sm" variant="soft" className="mt-4" icon="plus" onClick={() => setModal({ date: sel })}>Add on this day</Btn>
+                                </Card>
+                            </div>
+                        )}
+                    </Section>
+
+                    <ReminderModal data={modal} onClose={() => setModal(null)} onSave={save} />
+                    <Modal open={!!del} onClose={() => setDel(null)} title="Delete reminder?">
+                        <p className="text-sage">“{del && del.title}” will be removed from your demo reminders.</p>
+                        <div className="mt-6 flex gap-3 justify-end"><Btn variant="ghost" onClick={() => setDel(null)}>Keep it</Btn><Btn variant="danger" icon="trash" onClick={() => { setItems(items.filter(r => r.id !== del.id)); setDel(null); toast('Reminder deleted.'); }}>Delete reminder</Btn></div>
+                    </Modal>
+                </>
+            );
+        }
+        function ReminderModal({ data, onClose, onSave }) {
+            const blank = { title: '', category: 'Paper', date: todayISO(), time: '09:00', frequency: 'Weekly' };
+            const [f, setF] = useState(blank); const [err, setErr] = useState({});
+            useEffect(() => { if (data) { setF({ ...blank, ...data }); setErr({}); } }, [data]);
+            if (!data) return null;
+            const set = k => e => setF({ ...f, [k]: e.target.value });
+            const go = e => {
+                e.preventDefault(); const er = {};
+                if (f.title.trim().length < 2) er.title = 'Give the reminder a name.';
+                if (!f.date) er.date = 'Choose a date.'; if (!f.time) er.time = 'Choose a time.';
+                setErr(er); if (!Object.keys(er).length) onSave(f);
+            };
+            return (
+                <Modal open onClose={onClose} title={data.id ? 'Edit reminder' : 'Add reminder'}>
+                    <form onSubmit={go} noValidate className="grid sm:grid-cols-2 gap-5">
+                        <div className="sm:col-span-2"><Input id="rm-title" label="Reminder name" required value={f.title} onChange={set('title')} error={err.title} placeholder="Paper Recycling" /></div>
+                        <Select id="rm-cat" label="Waste category" value={f.category} onChange={set('category')} options={WASTE_CATS} />
+                        <Select id="rm-freq" label="Frequency" value={f.frequency} onChange={set('frequency')} options={['One-time', 'Weekly', 'Monthly']} />
+                        <Input id="rm-date" label={f.frequency === 'One-time' ? 'Date' : 'Starts on'} type="date" required value={f.date} onChange={set('date')} error={err.date} />
+                        <Input id="rm-time" label="Time" type="time" required value={f.time} onChange={set('time')} error={err.time} />
+                        <div className="sm:col-span-2 flex justify-end gap-3 pt-2"><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn type="submit" icon="check">{data.id ? 'Save changes' : 'Add reminder'}</Btn></div>
+                    </form>
+                </Modal>
+            );
+        }
+
+        /* ============================== WASTE REPORTING ============================== */
+        function Report() {
+            const { toast } = useApp();
+            const [reports, setReports] = usePersist('eco_reports', SEED_REPORTS);
+            const empty = { title: '', category: '', description: '', location: '', date: '' };
+            const [f, setF] = useState(empty); const [photo, setPhoto] = useState(null); const [err, setErr] = useState({});
+            const [busy, setBusy] = useState(false); const [ok, setOk] = useState(null);
+            const [fc, setFc] = useState('All'); const [fs, setFs] = useState('All');
+            const set = k => e => { setF({ ...f, [k]: e.target.value }); if (err[k]) setErr({ ...err, [k]: undefined }); };
+            const submit = ev => {
+                ev.preventDefault(); const e = {};
+                if (f.title.trim().length < 4) e.title = 'Enter a short title (at least 4 characters).';
+                if (!f.category) e.category = 'Choose an issue category.';
+                if (f.description.trim().length < 15) e.description = 'Describe the issue in at least 15 characters.';
+                if (f.location.trim().length < 4) e.location = 'Enter a location or address.';
+                if (!f.date) e.date = 'Choose the date you saw the issue.'; else if (f.date > todayISO()) e.date = 'Date observed cannot be in the future.';
+                if (photo && photo.size > 5 * 1024 * 1024) e.photo = 'Image must be under 5 MB.';
+                setErr(e);
+                if (Object.keys(e).length) { toast('Please fix the highlighted fields.', 'error'); const el = document.getElementById('rp-' + Object.keys(e)[0]); el && el.focus(); return; }
+                setBusy(true);
+                setTimeout(() => {
+                    const id = refId('RPT');
+                    setReports([{ id, ...f, status: 'Submitted', photo: photo ? photo.name : null }, ...reports]);
+                    setOk(id); setBusy(false); setF(empty); setPhoto(null); toast('Demo report added to the history.');
+                }, 1000);
+            };
+            const shown = reports.filter(r => (fc === 'All' || r.category === fc) && (fs === 'All' || r.status === fs));
+            const advance = id => setReports(reports.map(r => { if (r.id !== id) return r; const i = REPORT_STATUSES.indexOf(r.status); return i < REPORT_STATUSES.length - 1 ? { ...r, status: REPORT_STATUSES[i + 1] } : r; }));
+            return (
+                <>
+                    <PageHeader icon="alert" title="Waste Reporting" text="Spotted a pile of rubbish, an overflowing bin, or a missed collection? Describe it here and track it in the report history." />
+                    <Section className="mt-8 grid lg:grid-cols-5 gap-8 items-start">
+                        <Card className="lg:col-span-2 p-6 sm:p-7">
+                            <h2 className="text-xl font-extrabold text-forest">Submit a report</h2>
+                            {ok && <div className="mt-4 rounded-xl bg-mint border border-forest/20 p-4 flex gap-3" role="status"><Icon name="check" className="text-forest mt-0.5" /><div><p className="font-bold text-forest">Demo report created</p><p className="text-sm mt-1">Report ID <strong>{ok}</strong>. It was not sent to any authority.</p></div></div>}
+                            <form onSubmit={submit} noValidate className="mt-5 space-y-5">
+                                <Input id="rp-title" label="Report title" required value={f.title} onChange={set('title')} error={err.title} placeholder="Bags dumped behind the depot" />
+                                <Select id="rp-category" label="Waste issue category" required value={f.category} onChange={set('category')} error={err.category} placeholder="Select a category" options={Object.keys(REPORT_CATS)} />
+                                <Textarea id="rp-description" label="Description" required value={f.description} onChange={set('description')} error={err.description} placeholder="What did you see, and how big is the problem?" />
+                                <Input id="rp-location" label="Location or address" required value={f.location} onChange={set('location')} error={err.location} placeholder="Elm Street near the corner shop" />
+                                <Input id="rp-date" label="Date observed" type="date" required max={todayISO()} value={f.date} onChange={set('date')} error={err.date} />
+                                <FileField id="rp-photo" label="Photo (optional)" file={photo} onChange={setPhoto} error={err.photo} />
+                                <Btn type="submit" loading={busy} size="lg" className="w-full" icon="flag">{busy ? 'Submitting…' : 'Submit demo report'}</Btn>
+                            </form>
+                        </Card>
+                        <div className="lg:col-span-3">
+                            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                                <h2 className="text-xl font-extrabold text-forest">Report history</h2>
+                                <div className="flex gap-2 flex-wrap">
+                                    <div className="w-44"><select aria-label="Filter by category" className={inp()} value={fc} onChange={e => setFc(e.target.value)}><option>All</option>{Object.keys(REPORT_CATS).map(c => <option key={c}>{c}</option>)}</select></div>
+                                    <div className="w-40"><select aria-label="Filter by status" className={inp()} value={fs} onChange={e => setFs(e.target.value)}><option>All</option>{REPORT_STATUSES.map(c => <option key={c}>{c}</option>)}</select></div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-sage mb-3" aria-live="polite">Showing {shown.length} of {reports.length} reports</p>
+                            {shown.length === 0 ? <EmptyState icon="search" title="No reports match" text="Try a different category or status." action={<Btn variant="soft" onClick={() => { setFc('All'); setFs('All'); }}>Clear filters</Btn>} /> : (
+                                <ul className="space-y-3">{shown.map(r => (
+                                    <li key={r.id}><Card className="p-5">
+                                        <div className="flex gap-4">
+                                            <span className="w-11 h-11 rounded-xl bg-mint text-forest grid place-items-center shrink-0"><Icon name={REPORT_CATS[r.category]} /></span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-3 flex-wrap"><h3 className="font-bold leading-snug">{r.title}</h3><StatusBadge status={r.status} /></div>
+                                                <p className="text-sm text-sage mt-1">{r.description}</p>
+                                                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-sage">
+                                                    <span className="flex items-center gap-1"><Icon name="pin" size={14} />{r.location}</span>
+                                                    <span className="flex items-center gap-1"><Icon name="calendar" size={14} />{fmtDate(r.date)}</span>
+                                                    <span>{r.category}</span><span>{r.id}{r.sample ? ' · Sample' : ''}</span>
+                                                </div>
+                                                {r.status !== 'Resolved' && <Btn size="sm" variant="soft" className="mt-3" onClick={() => advance(r.id)}>Advance status (demo)</Btn>}
+                                            </div>
+                                        </div>
+                                    </Card></li>
+                                ))}</ul>
+                            )}
+                        </div>
+                    </Section>
+                </>
+            );
+        }
+
+        /* ============================== CENTERS ============================== */
+        function Centers() {
+            const { toast } = useApp();
+            const [q, setQ] = useState(''); const [mat, setMat] = useState('All'); const [type, setType] = useState('All'); const [sort, setSort] = useState('asc'); const [layout, setLayout] = useState('grid'); const [sel, setSel] = useState(null);
+            const types = [...new Set(CENTERS.map(c => c.type))];
+            const shown = CENTERS.filter(c => (mat === 'All' || c.materials.includes(mat)) && (type === 'All' || c.type === type) && (c.name + ' ' + c.address).toLowerCase().includes(q.toLowerCase())).sort((a, b) => sort === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+            const mapLink = c => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address);
+            const Card2 = ({ c }) => (
+                <Card hover className={cx('overflow-hidden flex', layout === 'grid' ? 'flex-col' : 'flex-col sm:flex-row')}>
+                    <Thumb kind={CENTER_COLORS[c.type]} className={layout === 'grid' ? 'h-40' : 'h-40 sm:h-auto sm:w-56 shrink-0'} label={`Illustration for ${c.name}`} />
+                    <div className="p-5 flex flex-col flex-1">
+                        <div className="flex items-start justify-between gap-2"><h3 className="font-extrabold text-lg leading-snug">{c.name}</h3></div>
+                        <div className="mt-1.5"><Chip>{c.type}</Chip> <Chip tone="sun">Sample</Chip></div>
+                        <ul className="mt-3 space-y-1.5 text-sm text-sage">
+                            <li className="flex gap-2"><Icon name="pin" size={16} className="mt-0.5" />{c.address}</li>
+                            <li className="flex gap-2"><Icon name="clock" size={16} className="mt-0.5" />{c.hours}</li>
+                            <li className="flex gap-2"><Icon name="phone" size={16} className="mt-0.5" />{c.phone}</li>
+                        </ul>
+                        <div className="mt-3 flex flex-wrap gap-1.5">{c.materials.map(m => <Chip key={m} tone="gray">{m}</Chip>)}</div>
+                        <div className="mt-auto pt-5 flex flex-wrap gap-2">
+                            <Btn size="sm" variant="soft" onClick={() => setSel(c)}>View Details</Btn>
+                            <Btn size="sm" variant="outline" href={mapLink(c)} icon="ext" onClick={() => toast('Opening a map search for this demo address.')}>Get Directions</Btn>
+                        </div>
+                    </div>
+                </Card>
+            );
+            return (
+                <>
+                    <PageHeader icon="pin" title="Recycling Centers" text="Search a directory of sample recycling centers by name, address, material, or type." />
+                    <Section className="mt-8">
+                        <Card className="p-4 sm:p-5">
+                            <div className="grid gap-4 md:grid-cols-12 items-end">
+                                <div className="md:col-span-4"><label htmlFor="cq" className="block text-sm font-semibold mb-1.5">Search</label><div className="relative"><Icon name="search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sage" /><input id="cq" className={cx(inp(), 'pl-10')} placeholder="Name or address" value={q} onChange={e => setQ(e.target.value)} /></div></div>
+                                <div className="md:col-span-2"><Select id="cm" label="Material" value={mat} onChange={e => setMat(e.target.value)} options={['All', ...WASTE_CATS]} /></div>
+                                <div className="md:col-span-3"><Select id="ct" label="Center type" value={type} onChange={e => setType(e.target.value)} options={['All', ...types]} /></div>
+                                <div className="md:col-span-2"><Select id="cs" label="Sort by name" value={sort} onChange={e => setSort(e.target.value)} options={[{ value: 'asc', label: 'A to Z' }, { value: 'desc', label: 'Z to A' }]} /></div>
+                                <div className="md:col-span-1 flex gap-1" role="group" aria-label="Layout">
+                                    {[['grid', 'grid'], ['list', 'list']].map(([v, ic]) => <button key={v} aria-label={`${v} layout`} aria-pressed={layout === v} onClick={() => setLayout(v)} className={cx('flex-1 min-h-[46px] rounded-xl grid place-items-center border transition', layout === v ? 'bg-forest text-white border-forest' : 'bg-white border-forest/20 hover:bg-mint')}><Icon name={ic} size={18} /></button>)}
+                                </div>
+                            </div>
+                        </Card>
+                        <p className="text-sm text-sage mt-5 mb-4" aria-live="polite">{shown.length} center{shown.length !== 1 && 's'} found</p>
+                        {shown.length === 0 ? <EmptyState icon="search" title="No centers found" text="Try a different search or clear the filters." action={<Btn variant="soft" onClick={() => { setQ(''); setMat('All'); setType('All'); }}>Clear filters</Btn>} /> : (
+                            <div className={layout === 'grid' ? 'grid sm:grid-cols-2 lg:grid-cols-3 gap-5' : 'space-y-4'}>{shown.map(c => <Card2 key={c.id} c={c} />)}</div>
+                        )}
+                    </Section>
+                    <Modal open={!!sel} onClose={() => setSel(null)} title={sel ? sel.name : ''}>
+                        {sel && <div>
+                            <Thumb kind={CENTER_COLORS[sel.type]} className="h-40 rounded-2xl" label={`Illustration for ${sel.name}`} />
+                            <p className="mt-4 text-charcoal leading-relaxed">{sel.about}</p>
+                            <dl className="mt-4 grid grid-cols-[auto,1fr] gap-x-5 gap-y-2 text-sm">
+                                <dt className="text-sage">Type</dt><dd>{sel.type}</dd><dt className="text-sage">Address</dt><dd>{sel.address}</dd><dt className="text-sage">Hours</dt><dd>{sel.hours}</dd><dt className="text-sage">Phone</dt><dd>{sel.phone}</dd>
+                                <dt className="text-sage">Accepts</dt><dd>{sel.materials.join(', ')}</dd>
+                            </dl>
+                            <p className="mt-4 text-xs text-sage">Fictional sample center for demonstration purposes.</p>
+                            <div className="mt-5 flex gap-3 flex-wrap"><Btn href={mapLink(sel)} icon="ext">Get Directions</Btn><Btn variant="ghost" onClick={() => setSel(null)}>Close</Btn></div>
+                        </div>}
+                    </Modal>
+                </>
+            );
+        }
+
+        /* ============================== LEARN ============================== */
+        function Learn({ articleId }) {
+            const { toast } = useApp();
+            const [q, setQ] = useState(''); const [cat, setCat] = useState('All');
+            const article = ARTICLES.find(a => a.id === articleId);
+            if (article) return <ArticleView a={article} />;
+            const shown = ARTICLES.filter(a => (cat === 'All' || a.category === cat) && (a.title + ' ' + a.desc).toLowerCase().includes(q.toLowerCase()));
+            const open = a => { location.hash = '#/learn/' + a.id; };
+            const jump = id => { const el = document.getElementById(id); el && el.scrollIntoView({ behavior: 'smooth' }); };
+            return (
+                <>
+                    <PageHeader icon="book" title="Learn & Resources" text="Guides, an item-by-item sorting helper, and a short quiz to put your recycling knowledge to the test.">
+                        <div className="flex gap-2 flex-wrap"><Btn variant="light" onClick={() => jump('sorter')}>Sorting guide</Btn><Btn variant="light" onClick={() => jump('quiz')}>Take the quiz</Btn></div>
+                    </PageHeader>
+                    <Section className="mt-10">
+                        <h2 className="text-xl font-extrabold text-forest">Featured articles</h2>
+                        <div className="mt-4 grid md:grid-cols-3 gap-5">{ARTICLES.filter(a => a.featured).map(a => <ArticleCard key={a.id} a={a} onOpen={open} />)}</div>
+                    </Section>
+                    <Section className="mt-14">
+                        <h2 className="text-xl font-extrabold text-forest">All resources</h2>
+                        <div className="mt-4 relative max-w-xl"><Icon name="search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sage" /><input aria-label="Search articles" className={cx(inp(), 'pl-10')} placeholder="Search articles" value={q} onChange={e => setQ(e.target.value)} /></div>
+                        <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-1" role="group" aria-label="Filter by category">
+                            {['All', ...ARTICLE_CATS].map(c => <button key={c} onClick={() => setCat(c)} aria-pressed={cat === c} className={cx('shrink-0 px-4 min-h-[40px] rounded-full text-sm font-semibold border transition', cat === c ? 'bg-forest text-white border-forest' : 'bg-white border-forest/20 hover:bg-mint')}>{c}</button>)}
+                        </div>
+                        <div className="mt-6">{shown.length === 0 ? <EmptyState icon="search" title="No articles found" text="Try another keyword or category." action={<Btn variant="soft" onClick={() => { setQ(''); setCat('All'); }}>Clear filters</Btn>} /> : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">{shown.map(a => <ArticleCard key={a.id} a={a} onOpen={open} />)}</div>}</div>
+                    </Section>
+                    <Section className="mt-20" id="sorter"><Sorter /></Section>
+                    <Section className="mt-20" id="quiz"><Quiz /></Section>
+                </>
+            );
+        }
+        function ArticleView({ a }) {
+            const related = ARTICLES.filter(x => x.id !== a.id && x.category !== a.category).slice(0, 2);
+            return (
+                <Section className="py-10 max-w-3xl">
+                    <Btn to="/learn" variant="ghost" icon="left">Back to resources</Btn>
+                    <Thumb kind={a.category} className="mt-4 h-56 sm:h-72 rounded-3xl" label={`Illustration for ${a.title}`} />
+                    <div className="mt-6 flex items-center gap-3 flex-wrap"><Chip>{a.category}</Chip><span className="text-sm text-sage flex items-center gap-1"><Icon name="clock" size={14} />{a.mins} min read</span></div>
+                    <h1 className="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-forest">{a.title}</h1>
+                    <p className="mt-3 text-lg text-sage">{a.desc}</p>
+                    <article className="mt-6 space-y-5 text-[17px] leading-8">{a.body.map((p, i) => <p key={i}>{p}</p>)}</article>
+                    <h2 className="mt-12 text-xl font-extrabold text-forest">Keep reading</h2>
+                    <div className="mt-4 grid sm:grid-cols-2 gap-5">{related.map(r => <ArticleCard key={r.id} a={r} />)}</div>
+                </Section>
+            );
+        }
+        function Sorter() {
+            const [q, setQ] = useState(''); const [pick, setPick] = useState(SORT_ITEMS[0]);
+            const matches = q.trim() ? SORT_ITEMS.filter(s => s.item.toLowerCase().includes(q.toLowerCase())) : SORT_ITEMS;
+            const tone = { forest: 'bg-forest text-white', sun: 'bg-sun text-charcoal', leaf: 'bg-leaf text-charcoal' };
+            return (
+                <div className="grid lg:grid-cols-2 gap-6">
+                    <Card className="p-6 sm:p-8">
+                        <h2 className="text-2xl font-extrabold text-forest">Where does it go?</h2>
+                        <p className="text-sage mt-1">Search or choose an item to see general disposal guidance.</p>
+                        <div className="mt-5 relative"><Icon name="search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sage" /><input aria-label="Search for an item" className={cx(inp(), 'pl-10')} placeholder="Try “battery” or “jar”" value={q} onChange={e => setQ(e.target.value)} /></div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {matches.map(s => <button key={s.item} aria-pressed={pick && pick.item === s.item} onClick={() => setPick(s)} className={cx('px-3.5 min-h-[40px] rounded-full text-sm font-semibold border transition', pick && pick.item === s.item ? 'bg-forest text-white border-forest' : 'bg-white border-forest/20 hover:bg-mint')}>{s.item}</button>)}
+                            {matches.length === 0 && <p className="text-sm text-sage">No match. Try another word, or check your local guidelines.</p>}
+                        </div>
+                    </Card>
+                    <Card className="p-6 sm:p-8 bg-mint border-0" aria-live="polite">
+                        {pick ? <>
+                            <p className="text-sm font-semibold text-sage">{pick.item}</p>
+                            <p className={cx('mt-2 inline-block rounded-xl px-4 py-2 font-extrabold text-lg', tone[pick.tone])}>{pick.cat}</p>
+                            <ul className="mt-5 space-y-3">{pick.tips.map(t => <li key={t} className="flex gap-3"><Icon name="check" className="text-forest mt-0.5" size={18} />{t}</li>)}</ul>
+                        </> : <p>Select an item to see guidance.</p>}
+                        <p className="mt-6 text-xs text-sage flex gap-2"><Icon name="info" size={16} />Recycling rules vary by location. Use this as general guidance and confirm with your local service.</p>
+                    </Card>
+                </div>
+            );
+        }
+        function Quiz() {
+            const [i, setI] = useState(0); const [pick, setPick] = useState(null); const [score, setScore] = useState(0); const [done, setDone] = useState(false);
+            const cur = QUIZ[i];
+            const choose = n => { if (pick !== null) return; setPick(n); if (n === cur.a) setScore(s => s + 1); };
+            const next = () => { if (i + 1 >= QUIZ.length) setDone(true); else { setI(i + 1); setPick(null); } };
+            const restart = () => { setI(0); setPick(null); setScore(0); setDone(false); };
+            return (
+                <Card className="p-6 sm:p-10 max-w-3xl mx-auto">
+                    <div className="flex items-center justify-between"><h2 className="text-2xl font-extrabold text-forest">Recycling quiz</h2>{!done && <Chip tone="gray">Score {score}</Chip>}</div>
+                    {done ? (
+                        <div className="text-center py-6" role="status">
+                            <div className="mx-auto w-16 h-16 rounded-2xl bg-sun grid place-items-center"><Icon name="trophy" size={32} /></div>
+                            <p className="mt-4 text-4xl font-extrabold text-forest">{score} / {QUIZ.length}</p>
+                            <p className="mt-2 text-sage">{score === QUIZ.length ? 'Perfect score. You really know your recycling.' : score >= 4 ? 'Great work. A few details to polish.' : 'Good start. Browse the guides and try again.'}</p>
+                            <div className="mt-6 flex gap-3 justify-center flex-wrap"><Btn onClick={restart} icon="loader">Restart quiz</Btn><Btn variant="outline" onClick={() => document.getElementById('sorter').scrollIntoView({ behavior: 'smooth' })}>Use the sorting guide</Btn></div>
+                        </div>
+                    ) : (
+                        <div className="mt-5">
+                            <div className="h-2 rounded-full bg-mint overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={QUIZ.length} aria-valuenow={i + 1} aria-label="Quiz progress"><div className="h-full bg-forest transition-all" style={{ width: `${((i + (pick !== null ? 1 : 0)) / QUIZ.length) * 100}%` }} /></div>
+                            <p className="mt-4 text-sm text-sage">Question {i + 1} of {QUIZ.length}</p>
+                            <h3 className="mt-1 text-xl font-bold">{cur.q}</h3>
+                            <div className="mt-5 grid gap-3">
+                                {cur.o.map((o, n) => {
+                                    const state = pick === null ? '' : n === cur.a ? 'ok' : n === pick ? 'bad' : 'dim';
+                                    return <button key={o} onClick={() => choose(n)} disabled={pick !== null} className={cx('text-left rounded-xl border px-4 py-3.5 font-semibold transition flex items-center gap-3 min-h-[52px]', !state && 'bg-white border-forest/20 hover:bg-mint hover:border-forest', state === 'ok' && 'bg-mint border-forest text-forest', state === 'bad' && 'bg-[#fdeeee] border-[#b03030] text-[#8a2323]', state === 'dim' && 'opacity-50 bg-white border-forest/10')}>
+                                        <span className="w-7 h-7 rounded-full border border-current grid place-items-center text-xs shrink-0">{state === 'ok' ? <Icon name="check" size={14} /> : state === 'bad' ? <Icon name="x" size={14} /> : String.fromCharCode(65 + n)}</span>{o}</button>;
+                                })}
+                            </div>
+                            {pick !== null && (
+                                <div className="mt-5 rounded-xl bg-ivory border border-forest/10 p-4" role="status">
+                                    <p className="font-bold">{pick === cur.a ? 'Correct!' : 'Not quite.'}</p><p className="text-sm text-sage mt-1">{cur.why}</p>
+                                    <Btn className="mt-4" onClick={next} iconRight="arrow">{i + 1 >= QUIZ.length ? 'See results' : 'Next question'}</Btn>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </Card>
+            );
+        }
+
+        /* ============================== IMPACT ============================== */
+        function BarChart({ data }) {
+            const [hi, setHi] = useState(null);
+            const max = 250, W = 600, H = 280, L = 40, B = 36, bw = 44, gap = (W - L - bw * data.length) / (data.length + 1);
+            return (
+                <div>
+                    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`Bar chart of monthly waste collected in kilograms (demo data): ${data.map(d => `${d.m} ${d.v}`).join(', ')}`}>
+                        {[0, 50, 100, 150, 200, 250].map(t => { const y = H - B - (t / max) * (H - B - 20); return <g key={t}><line x1={L} x2={W} y1={y} y2={y} stroke="#176B4D" strokeOpacity=".12" /><text x={L - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#68776C">{t}</text></g>; })}
+                        {data.map((d, i) => {
+                            const h = (d.v / max) * (H - B - 20), x = L + gap + i * (bw + gap), y = H - B - h; return (
+                                <g key={d.m} onMouseEnter={() => setHi(i)} onMouseLeave={() => setHi(null)} onFocus={() => setHi(i)} onBlur={() => setHi(null)} tabIndex={0} aria-label={`${d.m}: ${d.v} kg`}>
+                                    <rect x={x} y={y} width={bw} height={h} rx="8" fill={hi === i ? '#F2B84B' : '#176B4D'} className="transition" />
+                                    <text x={x + bw / 2} y={H - 14} textAnchor="middle" fontSize="12" fontWeight="600" fill="#26352B">{d.m}</text>
+                                    {hi === i && <text x={x + bw / 2} y={y - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#26352B">{d.v} kg</text>}
+                                </g>);
+                        })}
+                    </svg>
+                </div>
+            );
+        }
+        function Donut({ data }) {
+            const total = data.reduce((s, d) => s + d.v, 0); let acc = 0; const r = 70, C = 2 * Math.PI * r;
+            return (
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <svg viewBox="0 0 200 200" className="w-48 h-48 shrink-0" role="img" aria-label={`Donut chart of waste categories (demo data): ${data.map(d => `${d.n} ${d.v}%`).join(', ')}`}>
+                        <g transform="rotate(-90 100 100)">{data.map(d => { const len = (d.v / total) * C, el = <circle key={d.n} cx="100" cy="100" r={r} fill="none" stroke={d.c} strokeWidth="30" strokeDasharray={`${len - 2} ${C - len + 2}`} strokeDashoffset={-acc} />; acc += len; return el; })}</g>
+                        <text x="100" y="98" textAnchor="middle" fontSize="22" fontWeight="800" fill="#176B4D">{total}%</text><text x="100" y="116" textAnchor="middle" fontSize="11" fill="#68776C">of demo total</text>
+                    </svg>
+                    <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">{data.map(d => <li key={d.n} className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: d.c }} />{d.n} <strong className="ml-auto">{d.v}%</strong></li>)}</ul>
+                </div>
+            );
+        }
+        function Impact() {
+            const { toast } = useApp();
+            const [joined, setJoined] = usePersist('eco_challenges', {});
+            const [tip, setTip] = useState(0); const [camp, setCamp] = useState(null);
+            const kpis = [['1,250 kg', 'Total waste collected', 'scale'], ['320', 'Recycling pickups completed', 'truck'], ['96', 'Waste reports resolved', 'check'], ['185', 'Community participants', 'users']];
+            const prog = [['Recycling rate target', 72], ['Households participating', 58], ['Reports resolved within 14 days', 84]];
+            return (
+                <>
+                    <PageHeader icon="trend" title="Community Impact" text="A sample dashboard showing how a community's recycling efforts could be tracked." />
+                    <Section className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {kpis.map(([v, l, ic], i) => <Card key={l} className={cx('p-5', i === 0 && 'bg-forest text-white border-0')}><Icon name={ic} className={i === 0 ? 'text-sun' : 'text-leaf'} size={26} /><p className="mt-3 text-3xl font-extrabold">{v}</p><p className={cx('text-sm font-semibold mt-1', i === 0 ? 'text-white/80' : 'text-sage')}>{l}</p></Card>)}
+                    </Section>
+                    <Section className="mt-6 grid lg:grid-cols-5 gap-6">
+                        <Card className="lg:col-span-3 p-6"><div className="flex items-center justify-between mb-2"><h2 className="font-extrabold text-lg text-forest">Monthly waste collection (kg)</h2><Chip tone="sun">Demo data</Chip></div><BarChart data={MONTHLY} /></Card>
+                        <Card className="lg:col-span-2 p-6"><div className="flex items-center justify-between mb-5"><h2 className="font-extrabold text-lg text-forest">Waste by category</h2><Chip tone="sun">Demo data</Chip></div><Donut data={BREAKDOWN} /></Card>
+                    </Section>
+                    <Section className="mt-6">
+                        <Card className="p-6"><h2 className="font-extrabold text-lg text-forest">Community progress</h2>
+                            <div className="mt-5 grid md:grid-cols-3 gap-6">{prog.map(([l, v]) => (
+                                <div key={l}><div className="flex justify-between text-sm font-semibold"><span>{l}</span><span>{v}%</span></div><div className="mt-2 h-3 rounded-full bg-mint overflow-hidden" role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100} aria-label={l}><div className="h-full bg-leaf rounded-full" style={{ width: v + '%' }} /></div></div>
+                            ))}</div></Card>
+                    </Section>
+                    <Section className="mt-14">
+                        <h2 className="text-2xl font-extrabold text-forest">Environmental awareness campaigns</h2>
+                        <div className="mt-5 grid md:grid-cols-3 gap-5">{CAMPAIGNS.map(c => (
+                            <Card key={c.t} hover className="p-6 flex flex-col"><span className="w-12 h-12 rounded-xl bg-mint text-forest grid place-items-center"><Icon name={c.icon} size={24} /></span><h3 className="mt-4 font-extrabold text-lg">{c.t}</h3><p className="text-sm text-sage mt-1 flex items-center gap-1.5"><Icon name="calendar" size={14} />{c.d}</p><div className="mt-auto pt-5"><Btn size="sm" variant="soft" onClick={() => setCamp(c)}>Learn more</Btn></div></Card>
+                        ))}</div>
+                    </Section>
+                    <Section className="mt-14 grid lg:grid-cols-5 gap-6">
+                        <div className="lg:col-span-3">
+                            <h2 className="text-2xl font-extrabold text-forest">Monthly recycling challenges</h2>
+                            <div className="mt-5 space-y-4">{CHALLENGES.map(c => {
+                                const j = joined[c.id]; const val = j ? Math.min(c.goal, c.base + (j.n || 0)) : c.base; const pct = Math.round((val / c.goal) * 100);
+                                return (
+                                    <Card key={c.id} className="p-5">
+                                        <div className="flex items-start justify-between gap-3 flex-wrap"><div><h3 className="font-bold">{c.t}</h3><p className="text-sm text-sage">{val} of {c.goal} {c.unit} (demo)</p></div>
+                                            <div className="flex gap-2">{j && <Btn size="sm" variant="soft" disabled={val >= c.goal} onClick={() => setJoined({ ...joined, [c.id]: { n: (j.n || 0) + 1 } })}>Log progress</Btn>}
+                                                <Btn size="sm" variant={j ? 'outline' : 'primary'} onClick={() => { setJoined({ ...joined, [c.id]: j ? undefined : { n: 0 } }); toast(j ? 'Left challenge (demo).' : 'Joined challenge (demo).'); }}>{j ? 'Leave' : 'Join challenge'}</Btn></div></div>
+                                        <div className="mt-3 h-2.5 rounded-full bg-mint overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={c.t}><div className={cx('h-full rounded-full transition-all', pct >= 100 ? 'bg-sun' : 'bg-forest')} style={{ width: pct + '%' }} /></div>
+                                    </Card>);
+                            })}</div>
+                        </div>
+                        <div className="lg:col-span-2">
+                            <h2 className="text-2xl font-extrabold text-forest">Community tips</h2>
+                            <Card className="mt-5 p-6 bg-mint border-0" aria-live="polite"><Icon name="sprout" size={28} className="text-forest" /><p className="mt-4 text-lg font-semibold leading-relaxed">{TIPS[tip]}</p><div className="mt-5 flex items-center justify-between"><span className="text-sm text-sage">Tip {tip + 1} of {TIPS.length}</span><Btn size="sm" onClick={() => setTip((tip + 1) % TIPS.length)} iconRight="arrow">Next tip</Btn></div></Card>
+                        </div>
+                    </Section>
+                    <Modal open={!!camp} onClose={() => setCamp(null)} title={camp ? camp.t : ''}>{camp && <><p className="text-sage flex items-center gap-2"><Icon name="calendar" size={16} />{camp.d}</p><p className="mt-3 leading-relaxed">{camp.text}</p><div className="mt-6 flex gap-3"><Btn to="/learn" onClick={() => setCamp(null)}>Explore guides</Btn><Btn variant="ghost" onClick={() => setCamp(null)}>Close</Btn></div></>}</Modal>
+                </>
+            );
+        }
+
+        /* ============================== APP ============================== */
+        function useRoute() {
+            const get = () => (location.hash.replace(/^#/, '') || '/');
+            const [r, setR] = useState(get);
+            useEffect(() => { const h = () => { setR(get()); window.scrollTo(0, 0); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+            return r;
+        }
+        function App() {
+            const route = useRoute();
+            const [toasts, setToasts] = useState([]);
+            const [start, setStart] = useState(false); const [faq, setFaq] = useState(false); const [reset, setReset] = useState(false);
+            const toast = useCallback((msg, type = 'ok') => { const id = uid(); setToasts(t => [...t, { id, msg, type }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3800); }, []);
+            const dismiss = id => setToasts(t => t.filter(x => x.id !== id));
+            useEffect(() => { if (!location.hash) location.hash = '#/'; }, []);
+            let page;
+            if (route.startsWith('/learn')) page = <Learn articleId={route.split('/')[2]} />;
+            else if (route === '/recycling') page = <Recycling />;
+            else if (route === '/reminders') page = <Reminders />;
+            else if (route === '/report') page = <Report />;
+            else if (route === '/centers') page = <Centers />;
+            else if (route === '/impact') page = <Impact />;
+            else page = <Home />;
+            return (
+                <AppCtx.Provider value={{ toast }}>
+                    <a href="#main" onClick={e => { e.preventDefault(); document.getElementById('main').focus(); }} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg">Skip to content</a>
+                    <Navbar route={route} openStart={() => setStart(true)} />
+                    <main id="main" tabIndex={-1} key={route.split('/').slice(0, 2).join('/')} className="min-h-[70vh] outline-none">{page}</main>
+                    <Footer onFaq={() => setFaq(true)} onReset={() => setReset(true)} />
+                    <Modal open={start} onClose={() => setStart(false)} title="Where would you like to start?">
+                        <ul className="grid gap-3">{ALL_PAGES.map(([p, t, d, ic]) => (
+                            <li key={p}><a href={'#' + p} onClick={() => setStart(false)} className="flex items-center gap-4 rounded-xl border border-forest/15 p-4 hover:bg-mint hover:border-forest transition"><span className="w-11 h-11 rounded-xl bg-mint text-forest grid place-items-center"><Icon name={ic} /></span><span className="flex-1"><span className="block font-bold">{t}</span><span className="text-sm text-sage">{d}</span></span><Icon name="chev" className="text-sage" /></a></li>
+                        ))}</ul>
+                    </Modal>
+                    <Modal open={faq} onClose={() => setFaq(false)} title="Frequently asked questions">
+                        <dl className="space-y-5">{FAQS.map(([q, a]) => <div key={q}><dt className="font-bold">{q}</dt><dd className="text-sage mt-1">{a}</dd></div>)}</dl>
+                    </Modal>
+                    <Modal open={reset} onClose={() => setReset(false)} title="Reset demo data?">
+                        <p className="text-sage">This clears requests, reports, reminders, and challenge progress saved in this browser and restores the sample content.</p>
+                        <div className="mt-6 flex gap-3 justify-end"><Btn variant="ghost" onClick={() => setReset(false)}>Cancel</Btn><Btn icon="loader" onClick={() => { ['eco_requests', 'eco_reports', 'eco_reminders', 'eco_challenges'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { } }); location.reload(); }}>Reset demo data</Btn></div>
+                    </Modal>
+                    <Toasts items={toasts} dismiss={dismiss} />
+                </AppCtx.Provider>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>
